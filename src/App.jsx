@@ -31,8 +31,8 @@ const EncryptedChat = () => {
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
 
-  const ADMIN_PASSWORD = 'admin123';
-  const USER_PASSWORD = 'user123';
+  const ADMIN_PASSWORD = '1992';
+  const USER_PASSWORD = '1964';
 
   // --- 1. INITIALIZATION & CLEANUP ---
   useEffect(() => {
@@ -160,14 +160,26 @@ const EncryptedChat = () => {
 
   // --- 6. SENDING MESSAGES ---
   const handleSendMessage = async () => {
-    if (newMessage.trim()) {
-      await addDoc(collection(db, "messages"), {
-        text: newMessage,
-        sender: userType,
-        timestamp: serverTimestamp(),
-        type: 'text'
-      });
-      setNewMessage('');
+    const textToSend = newMessage.trim();
+    
+    if (textToSend) {
+      // 1. Clear the UI INSTANTLY (don't wait for server)
+      setNewMessage(''); 
+      
+      try {
+        // 2. Send to database in background
+        await addDoc(collection(db, "messages"), {
+          text: textToSend,
+          sender: userType,
+          timestamp: serverTimestamp(),
+          type: 'text'
+        });
+      } catch (error) {
+        // 3. If it fails, put the text back so they don't lose it
+        console.error("Error sending:", error);
+        setNewMessage(textToSend); 
+        alert("Failed to send message. Check connection.");
+      }
     }
   };
 
