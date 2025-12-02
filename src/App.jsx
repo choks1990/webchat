@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { 
-  collection, addDoc, deleteDoc, doc, setDoc, getDoc, 
-  query, orderBy, onSnapshot, limit, serverTimestamp, where, getDocs 
+  collection, addDoc, deleteDoc, doc, setDoc, getDoc, updateDoc,
+  query, orderBy, onSnapshot, limit, serverTimestamp, getDocs, where 
 } from 'firebase/firestore';
 import { 
-  Send, Phone, LogOut, Paperclip, Mic, X, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon 
+  Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck 
 } from 'lucide-react';
 
 const EncryptedChat = () => {
@@ -20,7 +20,7 @@ const EncryptedChat = () => {
   // Call & UI State
   const [isCallActive, setIsCallActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [autoDeleteDays, setAutoDeleteDays] = useState(7); // Default 7 days
+  const [autoDeleteDays, setAutoDeleteDays] = useState(7);
   const [recordingTime, setRecordingTime] = useState(0);
   const [uploading, setUploading] = useState(false);
 
@@ -31,26 +31,25 @@ const EncryptedChat = () => {
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
 
-  const ADMIN_PASSWORD = '1992';
-  const USER_PASSWORD = '1964';
+  const ADMIN_PASSWORD = 'admin123';
+  const USER_PASSWORD = 'user123';
 
   // --- 1. INITIALIZATION & CLEANUP ---
   useEffect(() => {
     if (isLoggedIn) {
-      // A. Load Settings (Auto-delete timer)
+      // A. Load Settings
       const fetchSettings = async () => {
         const docRef = doc(db, "settings", "config");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setAutoDeleteDays(docSnap.data().autoDeleteDays || 7);
         } else {
-          // Create default if missing
           await setDoc(doc(db, "settings", "config"), { autoDeleteDays: 7 });
         }
       };
       fetchSettings();
 
-      // B. Load Messages
+      // B. Load Messages & Mark as Read
       const q = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(100));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const msgs = snapshot.docs.map(doc => {
@@ -59,14 +58,25 @@ const EncryptedChat = () => {
           return { id: doc.id, ...data, timestamp: time };
         });
         setMessages(msgs);
+        
+        // MARK MESSAGES AS READ
+        // If I am 'admin', I should mark all 'user' messages as read
+        // If I am 'user', I should mark all 'admin' messages as read
+        snapshot.docs.forEach(async (docSnap) => {
+          const msg = docSnap.data();
+          // Only mark if it's NOT my message and NOT already read
+          if (msg.sender !== userType && msg.status !== 'read') {
+             await updateDoc(doc(db, "messages", docSnap.id), { status: 'read' });
+          }
+        });
       });
 
-      // C. Run Auto-Delete Check
+      // C. Cleanup
       checkAndCleanOldMessages();
 
       return () => unsubscribe();
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, userType]); // Re-run when userType is set
 
   useEffect(() => {
     scrollToBottom();
@@ -81,7 +91,7 @@ const EncryptedChat = () => {
     setAutoDeleteDays(days);
     await setDoc(doc(db, "settings", "config"), { autoDeleteDays: days });
     setShowSettings(false);
-    checkAndCleanOldMessages(days); // Run cleanup immediately
+    checkAndCleanOldMessages(days);
   };
 
   const checkAndCleanOldMessages = async (daysOverride) => {
@@ -89,8 +99,6 @@ const EncryptedChat = () => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
-    // We can't query by timestamp easily locally without a composite index, 
-    // so we fetch recent and filter manually for this simple app.
     const q = query(collection(db, "messages"));
     const snapshot = await getDocs(q);
     
@@ -104,7 +112,7 @@ const EncryptedChat = () => {
     });
   };
 
-  // --- 3. LOGIC: MANUAL DELETE (ADMIN) ---
+  // --- 3. LOGIC: MANUAL DELETE ---
   const deleteMessage = async (msgId) => {
     if (window.confirm("Delete this message permanently?")) {
       await deleteDoc(doc(db, "messages", msgId));
@@ -136,7 +144,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 5. AUTHENTICATION (SINGLE LOGIN) ---
+  // --- 5. AUTHENTICATION ---
   const handleUnifiedLogin = () => {
     if (password === ADMIN_PASSWORD) {
       setIsLoggedIn(true);
@@ -161,24 +169,20 @@ const EncryptedChat = () => {
   // --- 6. SENDING MESSAGES ---
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
-    
     if (textToSend) {
-      // 1. Clear the UI INSTANTLY (don't wait for server)
-      setNewMessage(''); 
-      
+      setNewMessage(''); // Optimistic update
       try {
-        // 2. Send to database in background
         await addDoc(collection(db, "messages"), {
           text: textToSend,
           sender: userType,
           timestamp: serverTimestamp(),
-          type: 'text'
+          type: 'text',
+          status: 'sent' // Default status
         });
       } catch (error) {
-        // 3. If it fails, put the text back so they don't lose it
         console.error("Error sending:", error);
-        setNewMessage(textToSend); 
-        alert("Failed to send message. Check connection.");
+        setNewMessage(textToSend); // Revert if failed
+        alert("Failed to send");
       }
     }
   };
@@ -201,7 +205,8 @@ const EncryptedChat = () => {
         fileSize: file.size,
         sender: userType,
         timestamp: serverTimestamp(),
-        type: 'file'
+        type: 'file',
+        status: 'sent'
       });
     }
     e.target.value = '';
@@ -230,7 +235,8 @@ const EncryptedChat = () => {
             duration: recordingTime,
             sender: userType,
             timestamp: serverTimestamp(),
-            type: 'voice'
+            type: 'voice',
+            status: 'sent'
           });
         }
         stream.getTracks().forEach(track => track.stop());
@@ -265,7 +271,7 @@ const EncryptedChat = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // --- RENDER: LOGIN SCREEN ---
+  // --- RENDER: LOGIN ---
   if (!isLoggedIn) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-800 to-gray-900">
@@ -277,7 +283,6 @@ const EncryptedChat = () => {
           </div>
           <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">Secure Login</h1>
           <p className="text-center text-gray-500 text-sm mb-6">Enter your access key to continue</p>
-          
           <div className="space-y-4">
             <input
               type="password"
@@ -287,12 +292,7 @@ const EncryptedChat = () => {
               onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
             />
-            <button 
-              onClick={handleUnifiedLogin} 
-              className="w-full bg-teal-600 text-white py-3 rounded-lg font-bold hover:bg-teal-700 transition shadow-lg"
-            >
-              Login
-            </button>
+            <button onClick={handleUnifiedLogin} className="w-full bg-teal-600 text-white py-3 rounded-lg font-bold hover:bg-teal-700 transition shadow-lg">Login</button>
           </div>
         </div>
       </div>
@@ -329,44 +329,28 @@ const EncryptedChat = () => {
           </div>
           <div>
             <h2 className="font-bold text-lg">{userType === 'admin' ? 'Admin Control' : 'Secure Chat'}</h2>
-            <p className="text-xs text-teal-100 opacity-90 flex items-center gap-1">
-               Disappearing: {autoDeleteDays} days
-            </p>
+            <p className="text-xs text-teal-100 opacity-90">Disappearing: {autoDeleteDays} days</p>
           </div>
         </div>
         
         <div className="flex items-center space-x-1">
-          {/* Settings (Admin Only) */}
           {userType === 'admin' && (
             <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-teal-700 rounded-full transition">
               <Settings size={22} />
             </button>
           )}
-          
-          {/* Call Button (Moved to Header) */}
-          <button onClick={startCall} className="p-2 hover:bg-teal-700 rounded-full transition">
-            <Phone size={22} />
-          </button>
-          
-          <button onClick={handleLogout} className="p-2 hover:bg-teal-700 rounded-full transition">
-            <LogOut size={22} />
-          </button>
+          <button onClick={startCall} className="p-2 hover:bg-teal-700 rounded-full transition"><Phone size={22} /></button>
+          <button onClick={handleLogout} className="p-2 hover:bg-teal-700 rounded-full transition"><LogOut size={22} /></button>
         </div>
       </div>
 
-      {/* SETTINGS MENU (Admin Only) */}
+      {/* SETTINGS (Admin Only) */}
       {showSettings && userType === 'admin' && (
         <div className="bg-teal-700 text-white p-4 absolute top-16 right-0 left-0 z-20 shadow-xl border-b border-teal-500">
           <p className="font-semibold mb-3 text-sm uppercase tracking-wide">Auto-Delete Messages After:</p>
           <div className="flex flex-wrap gap-2">
             {[1, 3, 7, 30].map(day => (
-              <button
-                key={day}
-                onClick={() => updateAutoDeleteSettings(day)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-                  autoDeleteDays === day ? 'bg-white text-teal-700' : 'bg-teal-800 text-teal-100 hover:bg-teal-600'
-                }`}
-              >
+              <button key={day} onClick={() => updateAutoDeleteSettings(day)} className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${autoDeleteDays === day ? 'bg-white text-teal-700' : 'bg-teal-800 text-teal-100 hover:bg-teal-600'}`}>
                 {day} Days
               </button>
             ))}
@@ -378,74 +362,55 @@ const EncryptedChat = () => {
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#e5ded8]">
         {messages.map(msg => (
           <div key={msg.id} className={`flex w-full ${msg.sender === userType ? 'justify-end' : 'justify-start'}`}>
-            <div className={`relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${
-              msg.sender === userType ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'
-            }`}>
+            <div className={`relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${msg.sender === userType ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
               
-              {/* Manual Delete Button (Admin Only) */}
               {userType === 'admin' && (
-                <button 
-                  onClick={() => deleteMessage(msg.id)}
-                  className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition"
-                  title="Delete Message"
-                >
-                  <Trash2 size={12} />
-                </button>
+                <button onClick={() => deleteMessage(msg.id)} className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition" title="Delete Message"><Trash2 size={12} /></button>
               )}
 
-              {/* Text Message */}
               {msg.type === 'text' && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
               
-              {/* File / Image Message */}
               {msg.type === 'file' && (
                 <div>
-                  {/* Photo View Logic */}
                   {msg.fileType?.startsWith('image/') ? (
-                    <div className="mb-1">
-                      <img 
-                        src={msg.fileData} 
-                        alt="Shared photo" 
-                        className="rounded-lg max-h-60 object-cover w-full cursor-pointer hover:opacity-95"
-                        onClick={() => window.open(msg.fileData, '_blank')}
-                      />
-                    </div>
+                    <img src={msg.fileData} alt="Shared photo" className="rounded-lg max-h-60 object-cover w-full cursor-pointer hover:opacity-95" onClick={() => window.open(msg.fileData, '_blank')} />
                   ) : (
                     <div className="flex items-center space-x-3 bg-black/5 p-2 rounded-md mb-1">
-                      <div className="bg-teal-500 p-2 rounded-full text-white">
-                        <Paperclip size={16} />
-                      </div>
+                      <div className="bg-teal-500 p-2 rounded-full text-white"><Paperclip size={16} /></div>
                       <div className="overflow-hidden">
                         <p className="text-sm font-semibold truncate">{msg.fileName}</p>
                         <p className="text-xs text-gray-500">{Math.round(msg.fileSize/1024)} KB</p>
                       </div>
-                      <a href={msg.fileData} target="_blank" rel="noreferrer" className="ml-auto text-teal-600">
-                        <Download size={18} />
-                      </a>
+                      <a href={msg.fileData} target="_blank" rel="noreferrer" className="ml-auto text-teal-600"><Download size={18} /></a>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Voice Message */}
               {msg.type === 'voice' && (
                 <div className="flex items-center gap-3 min-w-[200px]">
                   <div className="text-gray-500"><Mic size={20} /></div>
-                  <div className="flex-1">
-                    <audio controls src={msg.audioData} className="h-8 w-full max-w-[200px]" />
-                  </div>
+                  <div className="flex-1"><audio controls src={msg.audioData} className="h-8 w-full max-w-[200px]" /></div>
                   <span className="text-xs text-gray-500 font-mono">{formatDuration(msg.duration)}</span>
                 </div>
               )}
               
               <div className="text-[10px] text-gray-500 text-right mt-1 flex justify-end items-center gap-1">
                 {formatTime(msg.timestamp)}
-                {/* Admin Delete Icon (Visible on Hover logic handled by group class if needed, or simple absolute) */}
+                
+                {/* --- TICKS LOGIC --- */}
+                {msg.sender === userType && (
+                  <span className="ml-1">
+                    {msg.status === 'read' ? (
+                      <CheckCheck size={14} className="text-blue-500" /> // Blue Ticks
+                    ) : (
+                      <Check size={14} className="text-gray-500" /> // One Grey Tick (Sent)
+                    )}
+                  </span>
+                )}
+
                 {userType === 'admin' && (
-                    <Trash2 
-                        size={12} 
-                        className="cursor-pointer text-red-400 hover:text-red-600 ml-2" 
-                        onClick={() => deleteMessage(msg.id)} 
-                    />
+                    <Trash2 size={12} className="cursor-pointer text-red-400 hover:text-red-600 ml-2" onClick={() => deleteMessage(msg.id)} />
                 )}
               </div>
             </div>
@@ -457,32 +422,11 @@ const EncryptedChat = () => {
       {/* INPUT AREA */}
       <div className="bg-[#f0f2f5] px-4 py-2 flex items-center space-x-2">
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,application/pdf,.doc,.docx" />
-        
-        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition">
-          <ImageIcon size={24} />
-        </button>
-        
+        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition"><ImageIcon size={24} /></button>
         <div className="flex-1 bg-white rounded-full flex items-center px-4 py-2 shadow-sm border border-gray-100">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Message"
-            disabled={uploading}
-            className="flex-1 focus:outline-none text-gray-700 bg-transparent"
-          />
+          <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="Message" disabled={uploading} className="flex-1 focus:outline-none text-gray-700 bg-transparent" />
         </div>
-        
-        <button 
-          onClick={handleSendMessage} 
-          disabled={uploading || !newMessage.trim()} 
-          className={`p-3 rounded-full shadow-md transition ${
-            newMessage.trim() ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-300 text-gray-500'
-          }`}
-        >
-          <Send size={20} />
-        </button>
+        <button onClick={handleSendMessage} disabled={uploading || !newMessage.trim()} className={`p-3 rounded-full shadow-md transition ${newMessage.trim() ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-300 text-gray-500'}`}><Send size={20} /></button>
       </div>
     </div>
   );
