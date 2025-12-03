@@ -14,10 +14,80 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { db, collection, doc } from './firebase.config';
-import { cloudinaryConfig } from '../shared/firebase/config';
 import { Audio } from 'expo-av';
 
+// =====================================================
+// FIREBASE CONFIGURATION - Replace with your values
+// =====================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBhaWv2CY_JbTVSzruyOWBdWX06ubY69Vw",
+  authDomain: "chat-a57cb.firebaseapp.com",
+  projectId: "chat-a57cb",
+  storageBucket: "chat-a57cb.firebasestorage.app",
+  messagingSenderId: "74674191858",
+  appId: "1:74674191858:web:013f97035bed6bd7173f6b"
+};
+
+// =====================================================
+// CLOUDINARY CONFIGURATION
+// =====================================================
+const CLOUDINARY_CONFIG = {
+  cloudName: "dujpj0445",
+  uploadPreset: "chat_app_upload"
+};
+
+// =====================================================
+// CONSTANTS
+// =====================================================
+const ADMIN_PASSWORD = 'admin123';
+const USER_PASSWORD = 'user123';
+
+// =====================================================
+// UTILITY FUNCTIONS
+// =====================================================
+const formatTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatDuration = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const uploadToCloudinary = async (fileUri) => {
+  const formData = new FormData();
+  formData.append('file', {
+    uri: fileUri,
+    type: 'image/jpeg',
+    name: 'upload.jpg',
+  });
+  formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+
+  try {
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/auto/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    const data = await response.json();
+    return data.secure_url;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    return null;
+  }
+};
+
+// =====================================================
+// MAIN APP COMPONENT
+// =====================================================
 const App = () => {
   // --- STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -36,9 +106,6 @@ const App = () => {
 
   const scrollViewRef = useRef(null);
   const recordingIntervalRef = useRef(null);
-
-  const ADMIN_PASSWORD = 'admin123';
-  const USER_PASSWORD = 'user123';
 
   // --- LOAD MESSAGES FROM STORAGE ---
   useEffect(() => {
@@ -166,20 +233,28 @@ const App = () => {
       if (!result.canceled) {
         setUploading(true);
         
-        const newMsg = {
-          id: Date.now().toString(),
-          fileData: result.assets[0].uri,
-          fileType: 'image/jpeg',
-          fileName: 'image.jpg',
-          sender: userType,
-          timestamp: Date.now(),
-          type: 'file',
-          status: 'sent'
-        };
+        // Upload to Cloudinary
+        const uploadUrl = await uploadToCloudinary(result.assets[0].uri);
         
-        const updatedMessages = [...messages, newMsg];
-        setMessages(updatedMessages);
-        await saveMessages(updatedMessages);
+        if (uploadUrl) {
+          const newMsg = {
+            id: Date.now().toString(),
+            fileData: uploadUrl,
+            fileType: 'image/jpeg',
+            fileName: 'image.jpg',
+            sender: userType,
+            timestamp: Date.now(),
+            type: 'file',
+            status: 'sent'
+          };
+          
+          const updatedMessages = [...messages, newMsg];
+          setMessages(updatedMessages);
+          await saveMessages(updatedMessages);
+        } else {
+          Alert.alert('Error', 'Failed to upload image');
+        }
+        
         setUploading(false);
       }
     } catch (error) {
@@ -286,19 +361,6 @@ const App = () => {
     Alert.alert('Settings Updated', `Messages will auto-delete after ${days} days`);
   };
 
-  // --- UTILS ---
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // --- RENDER: LOGIN ---
   if (!isLoggedIn) {
     return (
@@ -317,6 +379,7 @@ const App = () => {
             onChangeText={setPassword}
             secureTextEntry
             onSubmitEditing={handleUnifiedLogin}
+            autoCapitalize="none"
           />
           
           <TouchableOpacity style={styles.loginButton} onPress={handleUnifiedLogin}>
@@ -452,7 +515,7 @@ const App = () => {
               
               {/* IMAGE MESSAGE */}
               {msg.type === 'file' && msg.fileType?.startsWith('image/') && (
-                <TouchableOpacity onPress={() => Alert.alert('Image', 'Full screen view coming soon!')}>
+                <TouchableOpacity onPress={() => Alert.alert('Image', 'Viewing full image')}>
                   <Image source={{ uri: msg.fileData }} style={styles.messageImage} />
                 </TouchableOpacity>
               )}
@@ -528,6 +591,9 @@ const App = () => {
   );
 };
 
+// =====================================================
+// STYLES
+// =====================================================
 const styles = StyleSheet.create({
   // LOGIN STYLES
   loginContainer: {
