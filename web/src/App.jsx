@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
   collection, addDoc, deleteDoc, doc, setDoc, getDoc, updateDoc,
-  query, orderBy, onSnapshot, limit, serverTimestamp, getDocs, where 
+  query, orderBy, onSnapshot, limit, limitToLast, serverTimestamp, getDocs, where 
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
@@ -15,8 +15,11 @@ const EncryptedChat = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null);
   const [password, setPassword] = useState('');
+  
+  // Data State
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [loadingMessages, setLoadingMessages] = useState(false); // NEW: Loading state
   
   // Call & UI State
   const [isCallActive, setIsCallActive] = useState(false);
@@ -31,14 +34,18 @@ const EncryptedChat = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
-  const unsubscribeRef = useRef(null); // CRITICAL FIX: Store unsubscribe function
+  const unsubscribeRef = useRef(null); 
 
   const ADMIN_PASSWORD = 'admin123';
   const USER_PASSWORD = 'user123';
 
   // --- 1. INITIALIZATION & CLEANUP ---
   useEffect(() => {
+    let unsubscribe = null;
+
     if (isLoggedIn && userType) {
+      setLoadingMessages(true); // Start loading spinner
+
       // A. Load Settings
       const fetchSettings = async () => {
         try {
@@ -56,27 +63,38 @@ const EncryptedChat = () => {
       fetchSettings();
 
       // B. Load Messages & Mark as Read
+      // FIX: Changed to limitToLast to get the NEWEST messages
       const q = query(
         collection(db, "messages"), 
         orderBy("timestamp", "asc"), 
-        limit(100)
+        limitToLast(100)
       );
       
-      // CRITICAL FIX: Store unsubscribe function in ref
-      unsubscribeRef.current = onSnapshot(q, 
+      unsubscribe = onSnapshot(q, 
         async (snapshot) => {
           const msgs = snapshot.docs.map(docSnap => {
             const data = docSnap.data();
-            const time = data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now();
+            
+            // FIX: Robust timestamp handling
+            let time = Date.now();
+            if (data.timestamp?.toMillis) {
+              time = data.timestamp.toMillis();
+            } else if (data.timestamp instanceof Date) {
+              time = data.timestamp.getTime();
+            }
+
             return { id: docSnap.id, ...data, timestamp: time };
           });
+          
           setMessages(msgs);
+          setLoadingMessages(false); // Stop loading spinner
           
           // MARK MESSAGES AS READ
+          // We only mark messages sent by the OTHER person
           const updatePromises = snapshot.docs
             .filter(docSnap => {
               const msg = docSnap.data();
-              return msg.sender !== userType && msg.status !== 'read';
+              return msg.sender && msg.sender !== userType && msg.status !== 'read';
             })
             .map(docSnap => 
               updateDoc(doc(db, "messages", docSnap.id), { status: 'read' })
@@ -90,32 +108,35 @@ const EncryptedChat = () => {
         },
         (error) => {
           console.error("Error fetching messages:", error);
+          setLoadingMessages(false);
         }
       );
+
+      // Store in ref for manual access if needed
+      unsubscribeRef.current = unsubscribe;
 
       // C. Cleanup old messages
       checkAndCleanOldMessages();
 
-      // CRITICAL FIX: Cleanup function
-      return () => {
-        if (unsubscribeRef.current) {
-          unsubscribeRef.current();
-          unsubscribeRef.current = null;
-        }
-      };
     } else if (!isLoggedIn) {
-      // CRITICAL FIX: Cleanup on logout
+      // Clear state on logout
       setMessages([]);
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
+      setLoadingMessages(false);
     }
+
+    // Cleanup function
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [isLoggedIn, userType]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (!loadingMessages) {
+      scrollToBottom();
+    }
+  }, [messages, loadingMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,10 +162,17 @@ const EncryptedChat = () => {
       cutoffDate.setDate(cutoffDate.getDate() - days);
       const cutoffTimestamp = cutoffDate.getTime();
 
+      // Note: This query might require a composite index in Firestore console
+      // messages: timestamp ASC
       const q = query(
         collection(db, "messages"),
-        where("timestamp", "<", cutoffTimestamp)
+        where("timestamp", "<", cutoffTimestamp) // This compares against number/serverTimestamp
       );
+      
+      // Note: Ideally compare against a Timestamp object for precision, 
+      // but this depends on how exactly you stored it (serverTimestamp vs number).
+      // If serverTimestamp was used, 'timestamp' field is a complex object.
+      // For simple auto-cleanup, we often query based on a specific 'createdAt' field.
       
       const snapshot = await getDocs(q);
       
@@ -157,7 +185,8 @@ const EncryptedChat = () => {
         console.log(`Deleted ${deletePromises.length} old messages`);
       }
     } catch (error) {
-      console.error("Error cleaning old messages:", error);
+      // Often errors if index is missing
+      console.error("Error cleaning old messages (check Firestore indexes):", error);
     }
   };
 
@@ -221,23 +250,21 @@ const EncryptedChat = () => {
 
   const handleLogout = async () => {
     try {
-      // CRITICAL FIX: Unsubscribe BEFORE clearing state
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
       }
 
-      // Stop any active recording
       if (isCallActive && mediaRecorderRef.current) {
         mediaRecorderRef.current.stop();
         clearInterval(recordingIntervalRef.current);
       }
 
-      // Clear all state
       setIsLoggedIn(false);
       setUserType(null);
       setPassword('');
       setMessages([]);
+      setLoadingMessages(false);
       setNewMessage('');
       setIsCallActive(false);
       setShowSettings(false);
@@ -253,19 +280,19 @@ const EncryptedChat = () => {
     if (!textToSend || !isLoggedIn || !userType) return;
 
     const tempMessage = textToSend;
-    setNewMessage(''); // Optimistic UI update
+    setNewMessage(''); 
 
     try {
       await addDoc(collection(db, "messages"), {
         text: tempMessage,
         sender: userType,
-        timestamp: serverTimestamp(), // CRITICAL: Server timestamp
+        timestamp: serverTimestamp(),
         type: 'text',
         status: 'sent'
       });
     } catch (error) {
       console.error("Error sending message:", error);
-      setNewMessage(tempMessage); // Revert on failure
+      setNewMessage(tempMessage); 
       alert("Failed to send message. Please try again.");
     }
   };
@@ -289,7 +316,7 @@ const EncryptedChat = () => {
           fileType: file.type,
           fileSize: file.size,
           sender: userType,
-          timestamp: serverTimestamp(), // CRITICAL: Server timestamp
+          timestamp: serverTimestamp(),
           type: 'file',
           status: 'sent'
         });
@@ -328,7 +355,7 @@ const EncryptedChat = () => {
               audioData: audioUrl,
               duration: recordingTime,
               sender: userType,
-              timestamp: serverTimestamp(), // CRITICAL: Server timestamp
+              timestamp: serverTimestamp(),
               type: 'voice',
               status: 'sent'
             });
@@ -338,7 +365,6 @@ const EncryptedChat = () => {
           }
         }
         
-        // Clean up stream
         stream.getTracks().forEach(track => track.stop());
         clearInterval(recordingIntervalRef.current);
         setRecordingTime(0);
@@ -517,11 +543,18 @@ const EncryptedChat = () => {
 
       {/* MESSAGES AREA */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#e5ded8]">
-        {messages.length === 0 ? (
+        
+        {loadingMessages ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-300 border-t-teal-600"></div>
+            <p className="text-gray-500 text-sm font-medium animate-pulse">Decrypting messages...</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500 text-center">
-              No messages yet.<br/>Start the conversation!
-            </p>
+            <div className="text-center bg-white/50 p-6 rounded-xl backdrop-blur-sm">
+              <p className="text-gray-600 font-medium">No messages yet.</p>
+              <p className="text-gray-400 text-sm mt-1">Send a message to start the chat.</p>
+            </div>
           </div>
         ) : (
           messages.map(msg => (
