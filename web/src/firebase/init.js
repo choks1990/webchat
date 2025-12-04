@@ -7,12 +7,12 @@ import { getStorage } from 'firebase/storage';
 
 // Firebase configuration - use environment variables in production
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBhaWv2CY_JbTVSzruyOWBdWX06ubY69Vw",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "chat-a57cb.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "chat-a57cb",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "chat-a57cb.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "74674191858",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:74674191858:web:013f97035bed6bd7173f6b"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCcQjt2IeO8iojdrygJmiOPOOOUFwMbtcg",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "web-app-262d4.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "web-app-262d4",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "web-app-262d4.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "460976604916",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:460976604916:web:40bec88137c9ee3b7980a1"
 };
 
 // Initialize Firebase

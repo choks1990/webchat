@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "74674191858",
-    "project_id": "chat-a57cb",
-    "storage_bucket": "chat-a57cb.firebasestorage.app"
+    "project_number": "460976604916",
+    "project_id": "web-app-262d4",
+    "storage_bucket": "web-app-262d4.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:74674191858:android:fba15f4b11d11fab173f6b",
+        "mobilesdk_app_id": "1:460976604916:android:e450a229fe11f2dd7980a1",
         "android_client_info": {
-          "package_name": "com.family.lineage"
+          "package_name": "com.personal.lineage"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBFlGhX5Gat264F7c-0xpxOMkSBTPlqVUI"
+          "current_key": "AIzaSyClMbOmObGCWfTM2w6uTjB241l4L82PYdA"
         }
       ],
       "services": {
