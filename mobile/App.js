@@ -1,3 +1,7 @@
+// mobile/App.js
+import './firebase/init'; // Add this at the top
+// ... rest of your imports
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,

@@ -1,3 +1,10 @@
+// web/src/App.jsx
+import './firebase/init'; // Import at the top to initialize Firebase
+import ChatWindow from './components/ChatWindow';
+import { auth } from './firebase/init';
+
+// ... rest of your App component
+
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { 
