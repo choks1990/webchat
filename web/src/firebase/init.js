@@ -1,6 +1,7 @@
 // web/src/firebase/init.js
 
 import { initializeApp } from 'firebase/app';
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
@@ -22,6 +23,15 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+
+enableIndexedDbPersistence(db)
+  .catch((err) => {
+    if (err.code == 'failed-precondition') {
+      console.log('Persistence failed: Multiple tabs open');
+    } else if (err.code == 'unimplemented') {
+      console.log('Persistence not supported by browser');
+    }
+  });
 
 // Collection names
 export const COLLECTIONS = {

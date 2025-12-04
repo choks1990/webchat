@@ -67,7 +67,7 @@ const EncryptedChat = () => {
       const q = query(
         collection(db, "messages"), 
         orderBy("timestamp", "asc"), 
-        limitToLast(100)
+        limitToLast(25)
       );
       
       unsubscribe = onSnapshot(q, 
