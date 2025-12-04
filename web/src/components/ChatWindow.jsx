@@ -1,12 +1,11 @@
 // web/src/components/ChatWindow.jsx
 import { useState, useEffect, useRef } from 'react';
-import { auth } from '../firebase/init';
 import { 
   sendMessage, 
   subscribeToMessages, 
   getChatHistory,
   markMessageAsRead 
-} from '../../../shared/services/chatService';
+} from '../services/chatService'; // Import from web folder, not shared
 
 const ChatWindow = ({ currentUser, roomId = 'general' }) => {
   const [messages, setMessages] = useState([]);
