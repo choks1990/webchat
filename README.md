@@ -1,151 +1,110 @@
-# 💬 WebChat - Secure Chat Application
+# 💬 WebChat - Secure Cross-Platform Chat Application
 
-A full-stack secure chat application with web and mobile support.
+A full-stack, secure, and cross-platform chat application built as a monorepo solution for both web and mobile environments. This project leverages modern web technologies and Firebase for real-time communication and data persistence.
 
-## 🌐 Web App (React + Vite)
+## ✨ Key Features
 
-Located in `/web` directory.
+The WebChat application is designed with security and user experience in mind, offering a robust set of features:
 
-### Setup
-\`\`\`bash
+*   **Real-time Messaging**: Instantaneous message delivery using Firebase Firestore.
+*   **Cross-Platform Support**: Unified experience across **Web** (React + Vite) and **Mobile** (React Native + Expo).
+*   **Media Sharing**: Support for **Image Sharing** and **Voice Messages** via Cloudinary integration.
+*   **Disappearing Messages**: **Auto-delete messages** feature based on a configurable time limit for enhanced privacy.
+*   **User Roles**: Distinct **Admin controls** for managing settings and messages.
+*   **Message Status**: **Read receipts** to track message delivery and viewing.
+*   **Security**: Implements **Password-based authentication** and **Secure file uploads**.
+
+## 📦 Technology Stack
+
+The project is structured as a monorepo, utilizing a shared Firebase configuration and distinct technology stacks for the client applications.
+
+| Component | Primary Technologies | Key Libraries/Services |
+| :--- | :--- | :--- |
+| **Web App** | React, Vite, JavaScript | Firebase Firestore, Tailwind CSS, Cloudinary |
+| **Mobile App** | React Native, Expo | Firebase, AsyncStorage |
+| **Backend/DB** | Firebase | Firestore, Authentication |
+
+## 🚀 Getting Started
+
+Follow these steps to set up and run the project locally.
+
+### 1. Firebase Configuration
+
+The application relies on Firebase for its backend services.
+
+1.  Create a new Firebase project via the [Firebase Console](https://console.firebase.google.com/).
+2.  **Enable Firestore Database** in your project.
+3.  For the **Web App**, update the configuration in `shared/firebase/config.js` with your project credentials.
+4.  For the **Mobile App**, download the `google-services.json` file (for Android) and place it in the `mobile/` directory.
+
+### 2. Web App Setup
+
+The web application is located in the `/web` directory.
+
+```bash
 cd web
 npm install
 npm run dev
-\`\`\`
+# The application will typically open at http://localhost:5173
+```
 
-## 📱 Mobile App (React Native + Expo)
+### 3. Mobile App Setup
 
-Located in `/mobile` directory.
+The mobile application is located in the `/mobile` directory and uses Expo.
 
-### Setup
-\`\`\`bash
+```bash
 cd mobile
 npm install
 npx expo start
-\`\`\`
+```
 
-### Test on Device
-1. Install Expo Go from Play Store
-2. Scan QR code
-3. Login with: `admin123` or `user123`
+To test on a physical device:
+1.  Install the **Expo Go** app from the Play Store or App Store.
+2.  Scan the QR code displayed in your terminal or browser.
+3.  Use the default credentials for testing: `admin123` or `user123`.
 
-## 🔥 Firebase Setup
+## 🛠️ Deployment
 
-1. Create Firebase project at https://console.firebase.google.com
-2. Enable Firestore Database
-3. Download `google-services.json` for Android
-4. Place in `mobile/google-services.json`
-5. Update `shared/firebase/config.js` with your credentials
+### Web Deployment
 
-## 🎨 Features
+To create a production build of the web application:
 
-- ✅ Real-time messaging
-- ✅ Image sharing
-- ✅ Voice messages
-- ✅ Auto-delete messages
-- ✅ Admin controls
-- ✅ Read receipts
-- ✅ Cross-platform (Web + Android + iOS)
-
-## 🚀 Deployment
-
-### Web
-\`\`\`bash
+```bash
 cd web
 npm run build
-# Deploy dist/ to your hosting
-\`\`\`
+# The production-ready files will be generated in the `dist/` directory.
+# Deploy the contents of `dist/` to your preferred static hosting service (e.g., Vercel, Netlify, Firebase Hosting).
+```
 
-### Android APK
-\`\`\`bash
+### Android APK Deployment
+
+To build a standalone Android application package (APK):
+
+```bash
 cd mobile
 npm install -g eas-cli
 eas build --platform android
-\`\`\`
-
-## 📦 Tech Stack
-
-**Web:**
-- React + Vite
-- Firebase Firestore
-- Tailwind CSS
-- Cloudinary
-
-**Mobile:**
-- React Native
-- Expo
-- Firebase
-- AsyncStorage
-
-## 🔐 Security
-
-- Password-based authentication
-- Auto-delete messages
-- Secure file uploads
-- Real-time sync
-
-## 📖 Documentation
-
-- [Web Setup](./web/README.md)
-- [Mobile Setup](./mobile/README.md)
-- [Firebase Config](./shared/firebase/README.md)
+# Follow the prompts from the Expo Application Services (EAS) CLI.
+```
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Open Pull Request
+We welcome contributions to the WebChat project. To contribute:
+
+1.  Fork the repository.
+2.  Create a new feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
 
 ## 📄 License
 
-MIT License
-\`\`\`
+Distributed under the **MIT License**. See the `LICENSE` file (if available) for more information.
 
----
+***
 
-## 🔄 Step 8: Import to Expo Snack
+Made with ❤️ by choks1990
 
-### Option A: Via GitHub Import
+⭐ Star this repo if you find it helpful!
 
-1. Go to https://snack.expo.dev/
-2. Click "Import" → "Import from GitHub"
-3. Enter: `choks1990/webchat` (if mobile folder exists)
-4. Select the `mobile` directory
-
-### Option B: Manual Import
-
-1. Create new Snack
-2. Copy contents of `mobile/App.js`
-3. Update `package.json` with dependencies
-4. Add `firebase.config.js`
-5. Test!
-
----
-
-## 🎯 Step 9: Local Development Setup
-
-### Terminal 1 - Web App
-```bash
-cd web
-npm install
-npm run dev
-# Opens at http://localhost:5173
-```
-
-### Terminal 2 - Mobile App
-```bash
-cd mobile
-npm install
-npx expo start
-# Scan QR with Expo Go
-```
-
----
-
-## 🔧 Step 10: Git Workflow
-
-### Update .gitignore
-
-Add to root `.gitignore`:
+For questions or feedback, open an issue on GitHub.
