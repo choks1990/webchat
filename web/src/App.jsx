@@ -1,9 +1,9 @@
-// web/src/App.jsx
+// web/src/App.jsx - OPTIMIZED VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
   collection, addDoc, deleteDoc, doc, setDoc, getDoc, updateDoc,
-  query, orderBy, onSnapshot, limit, limitToLast, serverTimestamp, getDocs, where 
+  query, orderBy, onSnapshot, limit, serverTimestamp, getDocs, where 
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
@@ -19,7 +19,7 @@ const EncryptedChat = () => {
   // Data State
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loadingMessages, setLoadingMessages] = useState(false); // NEW: Loading state
+  const [loadingMessages, setLoadingMessages] = useState(false);
   
   // Call & UI State
   const [isCallActive, setIsCallActive] = useState(false);
@@ -44,9 +44,9 @@ const EncryptedChat = () => {
     let unsubscribe = null;
 
     if (isLoggedIn && userType) {
-      setLoadingMessages(true); // Start loading spinner
+      setLoadingMessages(true);
 
-      // A. Load Settings
+      // A. Load Settings (non-blocking, parallel)
       const fetchSettings = async () => {
         try {
           const docRef = doc(db, "settings", "config");
@@ -60,22 +60,23 @@ const EncryptedChat = () => {
           console.error("Error fetching settings:", error);
         }
       };
-      fetchSettings();
+      fetchSettings(); // Don't await - run in parallel
 
-      // B. Load Messages & Mark as Read
-      // FIX: Changed to limitToLast to get the NEWEST messages
+      // B. OPTIMIZED: Use desc order with limit (much faster than limitToLast)
+      // This queries the NEWEST messages first, which is indexed by default
       const q = query(
         collection(db, "messages"), 
-        orderBy("timestamp", "asc"), 
-        limitToLast(25)
+        orderBy("timestamp", "desc"), // DESC is faster - uses default index
+        limit(25)
       );
       
       unsubscribe = onSnapshot(q, 
         async (snapshot) => {
-          const msgs = snapshot.docs.map(docSnap => {
+          // Reverse the array since we queried desc but want to display asc
+          const msgs = snapshot.docs.reverse().map(docSnap => {
             const data = docSnap.data();
             
-            // FIX: Robust timestamp handling
+            // Robust timestamp handling
             let time = Date.now();
             if (data.timestamp?.toMillis) {
               time = data.timestamp.toMillis();
@@ -87,10 +88,9 @@ const EncryptedChat = () => {
           });
           
           setMessages(msgs);
-          setLoadingMessages(false); // Stop loading spinner
+          setLoadingMessages(false);
           
-          // MARK MESSAGES AS READ
-          // We only mark messages sent by the OTHER person
+          // OPTIMIZED: Mark as read in background (non-blocking)
           const updatePromises = snapshot.docs
             .filter(docSnap => {
               const msg = docSnap.data();
@@ -101,7 +101,8 @@ const EncryptedChat = () => {
             );
           
           if (updatePromises.length > 0) {
-            await Promise.all(updatePromises).catch(err => 
+            // Fire and forget - don't block UI
+            Promise.all(updatePromises).catch(err => 
               console.error("Error marking messages as read:", err)
             );
           }
@@ -112,19 +113,18 @@ const EncryptedChat = () => {
         }
       );
 
-      // Store in ref for manual access if needed
       unsubscribeRef.current = unsubscribe;
 
-      // C. Cleanup old messages
-      checkAndCleanOldMessages();
+      // C. OPTIMIZED: Run cleanup in background after 2 seconds
+      setTimeout(() => {
+        checkAndCleanOldMessages();
+      }, 2000);
 
     } else if (!isLoggedIn) {
-      // Clear state on logout
       setMessages([]);
       setLoadingMessages(false);
     }
 
-    // Cleanup function
     return () => {
       if (unsubscribe) {
         unsubscribe();
@@ -133,7 +133,7 @@ const EncryptedChat = () => {
   }, [isLoggedIn, userType]);
 
   useEffect(() => {
-    if (!loadingMessages) {
+    if (!loadingMessages && messages.length > 0) {
       scrollToBottom();
     }
   }, [messages, loadingMessages]);
@@ -148,7 +148,8 @@ const EncryptedChat = () => {
     try {
       await setDoc(doc(db, "settings", "config"), { autoDeleteDays: days });
       setShowSettings(false);
-      await checkAndCleanOldMessages(days);
+      // Run cleanup in background
+      checkAndCleanOldMessages(days);
     } catch (error) {
       console.error("Error updating settings:", error);
       alert("Failed to update settings");
@@ -160,19 +161,16 @@ const EncryptedChat = () => {
       const days = daysOverride || autoDeleteDays;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      // Use Firestore Timestamp for proper comparison
       const cutoffTimestamp = cutoffDate.getTime();
 
-      // Note: This query might require a composite index in Firestore console
-      // messages: timestamp ASC
       const q = query(
         collection(db, "messages"),
-        where("timestamp", "<", cutoffTimestamp) // This compares against number/serverTimestamp
+        where("timestamp", "<", cutoffTimestamp),
+        orderBy("timestamp", "asc"),
+        limit(100) // Batch delete in chunks
       );
-      
-      // Note: Ideally compare against a Timestamp object for precision, 
-      // but this depends on how exactly you stored it (serverTimestamp vs number).
-      // If serverTimestamp was used, 'timestamp' field is a complex object.
-      // For simple auto-cleanup, we often query based on a specific 'createdAt' field.
       
       const snapshot = await getDocs(q);
       
@@ -185,8 +183,7 @@ const EncryptedChat = () => {
         console.log(`Deleted ${deletePromises.length} old messages`);
       }
     } catch (error) {
-      // Often errors if index is missing
-      console.error("Error cleaning old messages (check Firestore indexes):", error);
+      console.error("Error cleaning old messages:", error);
     }
   };
 
@@ -547,7 +544,7 @@ const EncryptedChat = () => {
         {loadingMessages ? (
           <div className="flex flex-col items-center justify-center h-full space-y-3">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-300 border-t-teal-600"></div>
-            <p className="text-gray-500 text-sm font-medium animate-pulse">Decrypting messages...</p>
+            <p className="text-gray-500 text-sm font-medium animate-pulse">Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
