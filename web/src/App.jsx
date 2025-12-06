@@ -36,8 +36,8 @@ const EncryptedChat = () => {
   const recordingIntervalRef = useRef(null);
   const unsubscribeRef = useRef(null); 
 
-  const ADMIN_PASSWORD = 'admin123';
-  const USER_PASSWORD = 'user123';
+  const ADMIN_PASSWORD = 'Doraemon@2022!';
+  const USER_PASSWORD = '1964';
 
   // --- 1. INITIALIZATION & CLEANUP ---
   useEffect(() => {
@@ -435,7 +435,7 @@ const EncryptedChat = () => {
               Login
             </button>
             <div className="text-center text-xs text-gray-500 mt-4">
-              <p>Admin: admin123 | User: user123</p>
+              <p>Welcome</p>
             </div>
           </div>
         </div>

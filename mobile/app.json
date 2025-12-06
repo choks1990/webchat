@@ -9,48 +9,63 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0d9488"
+      "backgroundColor": "#0f766e"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.personal.lineage"
+    },
     "android": {
-      "package": "com.family.lineage",
-      "versionCode": 1,
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0d9488"
+        "backgroundColor": "#0f766e"
       },
+      "package": "com.personal.lineage",
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO",
-        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
-      "@react-native-firebase/app",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow access to photos for sharing images in chat."
-        }
-      ],
       [
         "expo-av",
         {
-          "microphonePermission": "Allow access to microphone for voice messages."
+          "microphonePermission": "Allow Secure Chat to access your microphone for voice messages."
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Secure Chat to access your photos to share images."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
         "projectId": "a0b810a2-d511-45d9-931b-27147ff71361"
       }
-    }
+    },
+    "owner": "doraemon92"
   }
 }
