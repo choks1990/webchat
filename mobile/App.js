@@ -13,14 +13,13 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
-  ScrollView
+  Animated,
+  Keyboard
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Audio } from 'expo-av';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { MaterialIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { db } from './firebaseConfig';
 import {
@@ -50,6 +49,8 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   // Data State
   const [messages, setMessages] = useState([]);
@@ -62,12 +63,66 @@ export default function App() {
   const [autoDeleteDays, setAutoDeleteDays] = useState(7);
   const [recordingTime, setRecordingTime] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Refs
   const flatListRef = useRef(null);
-  const recordingRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const unsubscribeRef = useRef(null);
+  const audioPlayerRef = useRef(null);
+
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Keyboard handling
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
+  // Pulse animation for call recording
+  useEffect(() => {
+    if (isCallActive) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isCallActive]);
 
   // Auto-Delete Logic
   const checkAndCleanOldMessages = async (daysOverride) => {
@@ -105,7 +160,6 @@ export default function App() {
     if (isLoggedIn && userType) {
       setLoadingMessages(true);
 
-      // Load Settings
       const fetchSettings = async () => {
         try {
           const docRef = doc(db, 'settings', 'config');
@@ -121,11 +175,10 @@ export default function App() {
       };
       fetchSettings();
 
-      // Query Messages
       const q = query(
         collection(db, 'messages'),
         orderBy('timestamp', 'desc'),
-        limit(25)
+        limit(50)
       );
 
       unsubscribe = onSnapshot(
@@ -145,7 +198,6 @@ export default function App() {
           setMessages(msgs);
           setLoadingMessages(false);
 
-          // Mark as read
           const updatePromises = snapshot.docs
             .filter((docSnap) => {
               const msg = docSnap.data();
@@ -169,10 +221,9 @@ export default function App() {
 
       unsubscribeRef.current = unsubscribe;
 
-      // Run cleanup after 2 seconds
       setTimeout(() => {
         checkAndCleanOldMessages();
-      }, 2000);
+      }, 3000);
     } else if (!isLoggedIn) {
       setMessages([]);
       setLoadingMessages(false);
@@ -183,19 +234,17 @@ export default function App() {
         unsubscribe();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, userType]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (!loadingMessages && messages.length > 0) {
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 50);
     }
   }, [messages, loadingMessages]);
 
-  // Auto-Delete Logic  
   const updateAutoDeleteSettings = async (days) => {
     setAutoDeleteDays(days);
     try {
@@ -208,89 +257,151 @@ export default function App() {
     }
   };
 
-  // Delete Message
   const deleteMessage = async (msgId) => {
-    Alert.alert('Delete Message', 'Delete this message permanently?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'messages', msgId));
-          } catch (error) {
-            console.error('Error deleting message:', error);
-            Alert.alert('Error', 'Failed to delete message');
-          }
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Delete this message permanently?');
+      if (confirmed) {
+        try {
+          await deleteDoc(doc(db, 'messages', msgId));
+          console.log('Message deleted successfully');
+        } catch (error) {
+          console.error('Error deleting message:', error);
+          window.alert('Failed to delete message');
+        }
+      }
+    } else {
+      Alert.alert('Delete Message', 'Delete this message permanently?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'messages', msgId));
+            } catch (error) {
+              console.error('Error deleting message:', error);
+              Alert.alert('Error', 'Failed to delete message');
+            }
+          },
         },
-      },
-    ]);
+      ]);
+    }
   };
 
-  // Upload to Cloudinary
-  const uploadToCloudinary = async (uri, resourceType = 'auto') => {
+  const uploadToCloudinary = async (file, resourceType = 'auto') => {
     try {
       setUploading(true);
-      
-      const formData = new FormData();
-      const filename = uri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image';
+      console.log('Starting upload, Type:', resourceType, 'Platform:', Platform.OS);
 
-      formData.append('file', {
-        uri,
-        name: filename,
-        type,
-      });
+      let base64Data;
+      let mimeType = 'image/jpeg';
+      
+      if (Platform.OS === 'web' && typeof file === 'string' && file.startsWith('blob:')) {
+        const response = await fetch(file);
+        const blob = await response.blob();
+        mimeType = blob.type || 'image/jpeg';
+        base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result;
+            const base64 = result.includes(',') ? result.split(',')[1] : result;
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } 
+      else if (Platform.OS === 'web' && file instanceof Blob) {
+        mimeType = file.type || 'audio/webm';
+        base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result;
+            const base64 = result.includes(',') ? result.split(',')[1] : result;
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+      else if (typeof file === 'string' && (file.startsWith('file://') || file.startsWith('content://'))) {
+        const FileSystem = require('expo-file-system');
+        base64Data = await FileSystem.readAsStringAsync(file, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        if (file.toLowerCase().includes('.png')) {
+          mimeType = 'image/png';
+        } else if (file.toLowerCase().includes('.jpg') || file.toLowerCase().includes('.jpeg')) {
+          mimeType = 'image/jpeg';
+        } else if (file.toLowerCase().includes('.webm')) {
+          mimeType = 'audio/webm';
+        } else if (file.toLowerCase().includes('.m4a')) {
+          mimeType = 'audio/mp4';
+        } else if (resourceType === 'video') {
+          mimeType = 'audio/mp4';
+        }
+        
+        console.log('Native file detected, mime type:', mimeType);
+      }
+
+      const formData = new FormData();
+      formData.append('file', `data:${mimeType};base64,${base64Data}`);
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      console.log('Uploading to Cloudinary...', mimeType, 'Base64 length:', base64Data?.length);
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
         {
           method: 'POST',
           body: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+      const data = await response.json();
+      console.log('Upload response status:', response.status);
+
+      if (!response.ok || data.error) {
+        console.error('Upload failed:', data);
+        const errorMsg = data.error?.message || JSON.stringify(data.error) || `Upload failed: ${response.statusText}`;
+        throw new Error(errorMsg);
       }
 
-      const data = await response.json();
       setUploading(false);
+      console.log('Upload successful:', data.secure_url);
       return data.secure_url;
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error('Upload error:', error);
       setUploading(false);
-      Alert.alert('Error', 'Upload failed. Please try again.');
+      Alert.alert('Upload Error', `Failed to upload: ${error.message}`);
       return null;
     }
   };
 
-  // Authentication
   const handleUnifiedLogin = () => {
     const trimmedPassword = password.trim();
     
     if (trimmedPassword === ADMIN_PASSWORD) {
+      setPasswordError('');
       setIsLoggedIn(true);
       setUserType('admin');
       setPassword('');
     } else if (trimmedPassword === USER_PASSWORD) {
+      setPasswordError('');
       setIsLoggedIn(true);
       setUserType('user');
       setPassword('');
     } else {
-      // Show error alert
-      Alert.alert(
-        'Incorrect Password',
-        'Please check your password and try again.',
-        [{ text: 'OK' }]
-      );
-      // Clear password field
+      setPasswordError('Invalid password. Please try again.');
       setPassword('');
+      
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start();
     }
   };
 
@@ -301,14 +412,23 @@ export default function App() {
         unsubscribeRef.current = null;
       }
 
-      if (isCallActive && recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync();
+      if (isCallActive && mediaRecorderRef.current) {
+        try {
+          if (Platform.OS === 'web') {
+            mediaRecorderRef.current.stop();
+          } else {
+            await mediaRecorderRef.current.stopAndUnloadAsync();
+          }
+        } catch (e) {
+          console.log('Error stopping recorder:', e);
+        }
         clearInterval(recordingIntervalRef.current);
       }
 
       setIsLoggedIn(false);
       setUserType(null);
       setPassword('');
+      setPasswordError('');
       setMessages([]);
       setLoadingMessages(false);
       setNewMessage('');
@@ -320,17 +440,16 @@ export default function App() {
     }
   };
 
-  // Send Text Message
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
     if (!textToSend || !isLoggedIn || !userType) return;
 
-    const tempMessage = textToSend;
     setNewMessage('');
+    Keyboard.dismiss();
 
     try {
       await addDoc(collection(db, 'messages'), {
-        text: tempMessage,
+        text: textToSend,
         sender: userType,
         timestamp: serverTimestamp(),
         type: 'text',
@@ -338,35 +457,44 @@ export default function App() {
       });
     } catch (error) {
       console.error('Error sending message:', error);
-      setNewMessage(tempMessage);
+      setNewMessage(textToSend);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
 
-  // Pick and Upload Image
   const handleImagePicker = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.7,
       });
 
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
+        console.log('Image selected:', uri);
+        
         const fileUrl = await uploadToCloudinary(uri, 'image');
 
         if (fileUrl) {
+          console.log('Image uploaded successfully:', fileUrl);
+          
           await addDoc(collection(db, 'messages'), {
-            fileName: uri.split('/').pop(),
+            fileName: 'image.jpg',
             fileData: fileUrl,
-            fileType: 'image/jpeg',
+            fileType: result.assets[0].mimeType || 'image/jpeg',
             fileSize: result.assets[0].fileSize || 0,
             sender: userType,
             timestamp: serverTimestamp(),
             type: 'file',
             status: 'sent',
           });
+          
+          if (Platform.OS === 'web') {
+            console.log('Image sent successfully');
+          } else {
+            Alert.alert('Success', 'Image sent successfully');
+          }
         }
       }
     } catch (error) {
@@ -375,69 +503,152 @@ export default function App() {
     }
   };
 
-  // Voice Recording
   const startCall = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Error', 'Microphone permission denied');
-        return;
+      if (Platform.OS === 'web') {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          Alert.alert('Error', 'Audio recording is not supported in this browser');
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        audioChunksRef.current = [];
+        const mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log('Recording stopped, blob size:', audioBlob.size);
+          
+          if (audioBlob.size > 0) {
+            console.log('Uploading audio to Cloudinary...');
+            const audioUrl = await uploadToCloudinary(audioBlob, 'video');
+
+            if (audioUrl) {
+              console.log('Audio uploaded successfully:', audioUrl);
+              await addDoc(collection(db, 'messages'), {
+                audioData: audioUrl,
+                duration: recordingTime,
+                sender: userType,
+                timestamp: serverTimestamp(),
+                type: 'voice',
+                status: 'sent',
+              });
+              Alert.alert('Success', 'Call recording saved to chat');
+            } else {
+              Alert.alert('Error', 'Failed to upload recording');
+            }
+          } else {
+            Alert.alert('Error', 'No audio data recorded');
+          }
+
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        mediaRecorderRef.current = mediaRecorder;
+        setIsCallActive(true);
+        setRecordingTime(0);
+
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime((prev) => prev + 1);
+        }, 1000);
+
+        Alert.alert('Recording Started', 'Call recording is now active');
+      } 
+      else {
+        const { Audio } = require('expo-av');
+        
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Error', 'Microphone permission is required');
+          return;
+        }
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        
+        mediaRecorderRef.current = recording;
+        setIsCallActive(true);
+        setRecordingTime(0);
+
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime((prev) => prev + 1);
+        }, 1000);
+
+        Alert.alert('Recording Started', 'Call recording is now active');
       }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      recordingRef.current = recording;
-      setIsCallActive(true);
-      setRecordingTime(0);
-
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
     } catch (error) {
       console.error('Microphone error:', error);
-      Alert.alert('Error', 'Microphone access denied or not available.');
+      Alert.alert('Error', `Microphone access denied: ${error.message}`);
     }
   };
 
   const endCall = async () => {
-    if (recordingRef.current && isCallActive) {
+    if (mediaRecorderRef.current && isCallActive) {
       try {
-        await recordingRef.current.stopAndUnloadAsync();
-        const uri = recordingRef.current.getURI();
+        console.log('Stopping recording...');
         setIsCallActive(false);
         clearInterval(recordingIntervalRef.current);
+        
+        if (Platform.OS === 'web') {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current = null;
+          setRecordingTime(0);
+        } 
+        else {
+          const recording = mediaRecorderRef.current;
+          await recording.stopAndUnloadAsync();
+          const uri = recording.getURI();
+          
+          console.log('Recording saved at:', uri);
+          
+          if (uri) {
+            console.log('Uploading audio to Cloudinary...');
+            const audioUrl = await uploadToCloudinary(uri, 'video');
 
-        if (uri) {
-          const audioUrl = await uploadToCloudinary(uri, 'video');
-
-          if (audioUrl) {
-            await addDoc(collection(db, 'messages'), {
-              audioData: audioUrl,
-              duration: recordingTime,
-              sender: userType,
-              timestamp: serverTimestamp(),
-              type: 'voice',
-              status: 'sent',
-            });
+            if (audioUrl) {
+              console.log('Audio uploaded successfully:', audioUrl);
+              await addDoc(collection(db, 'messages'), {
+                audioData: audioUrl,
+                duration: recordingTime,
+                sender: userType,
+                timestamp: serverTimestamp(),
+                type: 'voice',
+                status: 'sent',
+              });
+              Alert.alert('Success', 'Call recording saved to chat');
+            } else {
+              Alert.alert('Error', 'Failed to upload recording');
+            }
           }
+          
+          mediaRecorderRef.current = null;
+          setRecordingTime(0);
         }
-
-        setRecordingTime(0);
-        recordingRef.current = null;
       } catch (error) {
         console.error('Error ending call:', error);
+        Alert.alert('Error', `Failed to save recording: ${error.message}`);
+        setIsCallActive(false);
+        clearInterval(recordingIntervalRef.current);
+        setRecordingTime(0);
+        mediaRecorderRef.current = null;
       }
     }
   };
 
-  // Utility Functions
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
     try {
@@ -454,21 +665,40 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Render Message Item
+  const playAudio = async (uri) => {
+    try {
+      if (Platform.OS === 'web') {
+        if (audioPlayerRef.current) {
+          audioPlayerRef.current.pause();
+          audioPlayerRef.current = null;
+        }
+
+        const audio = new Audio(uri);
+        audioPlayerRef.current = audio;
+        await audio.play();
+      } else {
+        const { Audio } = require('expo-av');
+        const { sound } = await Audio.Sound.createAsync({ uri });
+        await sound.playAsync();
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      Alert.alert('Error', 'Failed to play audio');
+    }
+  };
+
   const renderMessage = ({ item: msg }) => {
     const isSender = msg.sender === userType;
 
     return (
       <View style={[styles.messageContainer, isSender ? styles.messageSent : styles.messageReceived]}>
         <View style={[styles.messageBubble, isSender ? styles.bubbleSent : styles.bubbleReceived]}>
-          {/* Text Message */}
           {msg.type === 'text' && <Text style={styles.messageText}>{msg.text}</Text>}
 
-          {/* File Message */}
           {msg.type === 'file' && (
             <View>
               {msg.fileType?.startsWith('image/') ? (
-                <TouchableOpacity onPress={() => Linking.openURL(msg.fileData)}>
+                <TouchableOpacity onPress={() => Platform.OS === 'web' ? window.open(msg.fileData, '_blank') : Linking.openURL(msg.fileData)}>
                   <Image source={{ uri: msg.fileData }} style={styles.messageImage} />
                 </TouchableOpacity>
               ) : (
@@ -480,7 +710,7 @@ export default function App() {
                     </Text>
                     <Text style={styles.fileSize}>{Math.round(msg.fileSize / 1024)} KB</Text>
                   </View>
-                  <TouchableOpacity onPress={() => Linking.openURL(msg.fileData)}>
+                  <TouchableOpacity onPress={() => Platform.OS === 'web' ? window.open(msg.fileData, '_blank') : Linking.openURL(msg.fileData)}>
                     <Feather name="download" size={20} color="#0f766e" />
                   </TouchableOpacity>
                 </View>
@@ -488,20 +718,12 @@ export default function App() {
             </View>
           )}
 
-          {/* Voice Message */}
           {msg.type === 'voice' && (
             <View style={styles.voiceContainer}>
               <Ionicons name="mic" size={20} color="#666" />
               <TouchableOpacity
                 style={styles.playButton}
-                onPress={async () => {
-                  try {
-                    const { sound } = await Audio.Sound.createAsync({ uri: msg.audioData });
-                    await sound.playAsync();
-                  } catch (error) {
-                    console.error('Error playing audio:', error);
-                  }
-                }}
+                onPress={() => playAudio(msg.audioData)}
               >
                 <Ionicons name="play-circle" size={32} color="#0f766e" />
               </TouchableOpacity>
@@ -509,7 +731,6 @@ export default function App() {
             </View>
           )}
 
-          {/* Message Footer */}
           <View style={styles.messageFooter}>
             <Text style={styles.messageTime}>{formatTime(msg.timestamp)}</Text>
             {isSender && (
@@ -522,8 +743,15 @@ export default function App() {
               </View>
             )}
             {userType === 'admin' && (
-              <TouchableOpacity onPress={() => deleteMessage(msg.id)} style={styles.deleteButton}>
-                <MaterialIcons name="delete" size={14} color="#ef4444" />
+              <TouchableOpacity 
+                onPress={() => {
+                  console.log('Delete button pressed for message:', msg.id);
+                  deleteMessage(msg.id);
+                }} 
+                style={styles.deleteButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="delete" size={16} color="#ef4444" />
               </TouchableOpacity>
             )}
           </View>
@@ -532,74 +760,146 @@ export default function App() {
     );
   };
 
-  // LOGIN SCREEN
   if (!isLoggedIn) {
     return (
-      <View style={styles.loginContainer}>
+      <LinearGradient
+        colors={['#0f766e', '#14b8a6', '#2dd4bf']}
+        style={styles.loginContainer}
+      >
         <StatusBar style="light" />
-        <View style={styles.loginCard}>
-          <View style={styles.loginIcon}>
-            <Ionicons name="lock-closed" size={32} color="#fff" />
+        <Animated.View 
+          style={[
+            styles.loginCard,
+            { transform: [{ translateX: shakeAnim }] }
+          ]}
+        >
+          <LinearGradient
+            colors={['#14b8a6', '#0f766e']}
+            style={styles.loginIcon}
+          >
+            <Ionicons name="shield-checkmark" size={40} color="#fff" />
+          </LinearGradient>
+
+          <Text style={styles.loginTitle}>Lineage</Text>
+          <Text style={styles.loginSubtitle}>Enter your password to continue</Text>
+
+          <View style={styles.passwordInputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
+            <TextInput
+              style={styles.loginInput}
+              placeholder="Enter password"
+              placeholderTextColor="#94a3b8"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                setPasswordError('');
+              }}
+              onSubmitEditing={handleUnifiedLogin}
+              autoFocus
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+              <Ionicons 
+                name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                size={20} 
+                color="#64748b" 
+              />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.loginTitle}>Secure Login</Text>
-          <Text style={styles.loginSubtitle}>Enter your access key to continue</Text>
-          <TextInput
-            style={styles.loginInput}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            onSubmitEditing={handleUnifiedLogin}
-            autoFocus
-          />
-          <TouchableOpacity style={styles.loginButton} onPress={handleUnifiedLogin}>
-            <Text style={styles.loginButtonText}>Login</Text>
+
+          {passwordError ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={16} color="#ef4444" />
+              <Text style={styles.errorText}>{passwordError}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity style={styles.loginButtonWrapper} onPress={handleUnifiedLogin}>
+            <LinearGradient
+              colors={['#14b8a6', '#0d9488']}
+              style={styles.loginButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.loginButtonText}>Unlock</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
+            </LinearGradient>
           </TouchableOpacity>
-          <Text style={styles.loginHint}>Admin: admin123 | User: user123</Text>
-        </View>
-      </View>
+
+          <Text style={styles.loginHint}>Secure end-to-end encrypted chat</Text>
+        </Animated.View>
+      </LinearGradient>
     );
   }
 
-  // MAIN APP
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={0}
     >
       <StatusBar style="light" />
 
-      {/* Call Overlay */}
       {isCallActive && (
         <Modal visible={isCallActive} animationType="fade">
-          <View style={styles.callOverlay}>
+          <LinearGradient
+            colors={['#1f2937', '#111827']}
+            style={styles.callOverlay}
+          >
             <View style={styles.callContent}>
-              <View style={styles.callAvatar}>
-                <Text style={styles.callAvatarText}>{userType === 'admin' ? 'U' : 'A'}</Text>
+              <Animated.View 
+                style={[
+                  styles.callAvatar,
+                  { transform: [{ scale: pulseAnim }] }
+                ]}
+              >
+                <LinearGradient
+                  colors={['#ef4444', '#dc2626']}
+                  style={styles.callAvatarGradient}
+                >
+                  <Text style={styles.callAvatarText}>{userType === 'admin' ? 'U' : 'A'}</Text>
+                </LinearGradient>
+              </Animated.View>
+              
+              <View style={styles.recordingBadge}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>RECORDING</Text>
               </View>
+
               <Text style={styles.callTitle}>Voice Call Active</Text>
               <Text style={styles.callTimer}>{formatDuration(recordingTime)}</Text>
             </View>
+            
             <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-              <Ionicons name="call" size={40} color="#fff" />
+              <LinearGradient
+                colors={['#ef4444', '#dc2626']}
+                style={styles.endCallButtonGradient}
+              >
+                <MaterialIcons name="call-end" size={36} color="#fff" />
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
         </Modal>
       )}
 
-      {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#0f766e', '#14b8a6']}
+        style={styles.header}
+      >
         <View style={styles.headerLeft}>
-          <View style={styles.avatar}>
+          <LinearGradient
+            colors={['#ffffff', '#f0fdfa']}
+            style={styles.avatar}
+          >
             <Text style={styles.avatarText}>{userType === 'admin' ? 'A' : 'U'}</Text>
-          </View>
+          </LinearGradient>
           <View>
             <Text style={styles.headerTitle}>
-              {userType === 'admin' ? 'Admin Control' : 'Lineage'}
+              {userType === 'admin' ? 'Admin Control' : 'Secure Chat'}
             </Text>
-            <Text style={styles.headerSubtitle}>Disappearing: {autoDeleteDays} days</Text>
+            <Text style={styles.headerSubtitle}>
+              {isCallActive ? '🔴 Recording...' : `Disappearing: ${autoDeleteDays} days`}
+            </Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -611,18 +911,23 @@ export default function App() {
               <Ionicons name="settings-sharp" size={24} color="#fff" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.headerButton} onPress={startCall}>
-            <Ionicons name="call" size={24} color="#fff" />
+          <TouchableOpacity 
+            style={[styles.headerButton, isCallActive && styles.headerButtonActive]} 
+            onPress={isCallActive ? endCall : startCall}
+          >
+            <MaterialIcons name={isCallActive ? "call-end" : "call"} size={24} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
             <MaterialIcons name="logout" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
-      {/* Settings Panel */}
       {showSettings && userType === 'admin' && (
-        <View style={styles.settingsPanel}>
+        <LinearGradient
+          colors={['#0d9488', '#0f766e']}
+          style={styles.settingsPanel}
+        >
           <Text style={styles.settingsTitle}>AUTO-DELETE MESSAGES AFTER:</Text>
           <View style={styles.settingsButtons}>
             {[1, 3, 7, 30].map((day) => (
@@ -645,10 +950,9 @@ export default function App() {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </LinearGradient>
       )}
 
-      {/* Messages Area */}
       <View style={styles.messagesContainer}>
         {loadingMessages ? (
           <View style={styles.loadingContainer}>
@@ -657,8 +961,9 @@ export default function App() {
           </View>
         ) : messages.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages yet.</Text>
-            <Text style={styles.emptySubtext}>Send a message to start the chat.</Text>
+            <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e1" />
+            <Text style={styles.emptyText}>No messages yet</Text>
+            <Text style={styles.emptySubtext}>Send a message to start the conversation</Text>
           </View>
         ) : (
           <FlatList
@@ -667,32 +972,39 @@ export default function App() {
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesList}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            removeClippedSubviews={true}
           />
         )}
       </View>
 
-      {/* Input Area */}
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, Platform.OS === 'android' && { paddingBottom: keyboardHeight > 0 ? 8 : 8 }]}>
         <TouchableOpacity
           style={styles.inputButton}
           onPress={handleImagePicker}
           disabled={uploading}
         >
-          <Ionicons name="image-outline" size={24} color={uploading ? '#ccc' : '#666'} />
+          <MaterialIcons name="attach-file" size={26} color={uploading ? '#ccc' : '#0f766e'} />
         </TouchableOpacity>
 
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
-            placeholder={uploading ? 'Uploading...' : 'Message'}
-            placeholderTextColor="#999"
+            placeholder={uploading ? 'Uploading...' : 'Type a message...'}
+            placeholderTextColor="#94a3b8"
             value={newMessage}
             onChangeText={setNewMessage}
             multiline
             maxLength={1000}
             editable={!uploading}
+            onFocus={() => {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
           />
         </View>
 
@@ -704,11 +1016,15 @@ export default function App() {
           onPress={handleSendMessage}
           disabled={!newMessage.trim() || uploading}
         >
-          <Ionicons name="send" size={20} color="#fff" />
+          <LinearGradient
+            colors={newMessage.trim() && !uploading ? ['#14b8a6', '#0f766e'] : ['#d1d5db', '#d1d5db']}
+            style={styles.sendButtonGradient}
+          >
+            <MaterialIcons name="send" size={22} color="#fff" />
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
-      {/* Uploading Indicator */}
       {uploading && (
         <View style={styles.uploadingIndicator}>
           <ActivityIndicator size="small" color="#fff" />
@@ -728,88 +1044,176 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1f2937',
     padding: 20,
   },
   loginCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 32,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+      web: {
+        boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+      },
+    }),
   },
   loginIcon: {
-    backgroundColor: '#0f766e',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#14b8a6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: '0 4px 16px rgba(20,184,166,0.3)',
+      },
+    }),
   },
   loginTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1f2937',
     marginBottom: 8,
   },
   loginSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 24,
+    fontSize: 15,
+    color: '#64748b',
+    marginBottom: 32,
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  inputIcon: {
+    marginRight: 8,
   },
   loginInput: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    flex: 1,
+    height: 56,
     fontSize: 16,
+    color: '#1f2937',
+  },
+  eyeIcon: {
+    padding: 8,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    padding: 12,
+    borderRadius: 8,
+    width: '100%',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#dc2626',
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loginButtonWrapper: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#14b8a6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '0 4px 16px rgba(20,184,166,0.3)',
+      },
+    }),
   },
   loginButton: {
-    backgroundColor: '#0f766e',
-    width: '100%',
-    padding: 14,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
   },
   loginHint: {
-    fontSize: 12,
-    color: '#6b7280',
+    fontSize: 13,
+    color: '#94a3b8',
   },
   header: {
-    backgroundColor: '#0f766e',
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      },
+    }),
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   avatarText: {
     color: '#0f766e',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   headerTitle: {
@@ -818,19 +1222,38 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#a7f3d0',
+    color: '#ccfbf1',
     fontSize: 12,
+    marginTop: 2,
   },
   headerRight: {
     flexDirection: 'row',
+    gap: 4,
   },
   headerButton: {
-    padding: 8,
-    marginLeft: 4,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerButtonActive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
   },
   settingsPanel: {
-    backgroundColor: '#0d9488',
     padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+      },
+    }),
   },
   settingsTitle: {
     color: '#fff',
@@ -845,10 +1268,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   settingsButton: {
-    backgroundColor: '#115e59',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   settingsButtonActive: {
     backgroundColor: '#fff',
@@ -856,7 +1281,7 @@ const styles = StyleSheet.create({
   settingsButtonText: {
     color: '#ccfbf1',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   settingsButtonTextActive: {
     color: '#0d9488',
@@ -878,24 +1303,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    margin: 20,
-    borderRadius: 12,
     padding: 24,
   },
   emptyText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
+    color: '#475569',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
   },
   emptySubtext: {
-    color: '#999',
+    color: '#94a3b8',
     fontSize: 14,
-    marginTop: 4,
+    marginTop: 8,
+    textAlign: 'center',
   },
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingBottom: 20,
   },
   messageContainer: {
     marginBottom: 12,
@@ -909,25 +1334,39 @@ const styles = StyleSheet.create({
   messageBubble: {
     maxWidth: '85%',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+      },
+    }),
   },
   bubbleSent: {
     backgroundColor: '#d9fdd3',
-    borderTopRightRadius: 0,
+    borderTopRightRadius: 4,
   },
   bubbleReceived: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 0,
+    borderTopLeftRadius: 4,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#1f2937',
     lineHeight: 20,
   },
   messageImage: {
     width: 200,
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 4,
   },
   fileContainer: {
@@ -980,139 +1419,211 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     marginLeft: 8,
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
   inputContainer: {
-    backgroundColor: '#f0f2f5',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
   },
   inputButton: {
-    padding: 8,
+    padding: 12,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    marginRight: 8,
+    marginBottom: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+      },
+    }),
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 20,
-    marginHorizontal: 8,
+    borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    marginRight: 8,
+    marginBottom: 2,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#e2e8f0',
+    maxHeight: 120,
   },
   input: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#1f2937',
     maxHeight: 100,
   },
   sendButton: {
-    backgroundColor: '#0f766e',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#14b8a6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(20,184,166,0.3)',
+      },
+    }),
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      },
+      web: {
+        boxShadow: 'none',
+      },
+    }),
+  },
+  sendButtonGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendButtonDisabled: {
-    backgroundColor: '#d1d5db',
-  },
   uploadingIndicator: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 90,
     right: 16,
     backgroundColor: '#0f766e',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+      },
+    }),
   },
   uploadingText: {
     color: '#fff',
     fontSize: 14,
     marginLeft: 8,
+    fontWeight: '500',
   },
   callOverlay: {
     flex: 1,
-    backgroundColor: '#1f2937',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   callContent: {
     alignItems: 'center',
   },
   callAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#374151',
+    marginBottom: 32,
+  },
+  callAvatarGradient: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#0f766e',
-    marginBottom: 24,
+    borderWidth: 6,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   callAvatarText: {
-    fontSize: 48,
+    fontSize: 56,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  recordingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 24,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+  },
+  recordingText: {
+    color: '#fee2e2',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   callTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 16,
   },
   callTimer: {
-    fontSize: 32,
+    fontSize: 48,
     color: '#5eead4',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: 'bold',
   },
   endCallButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 40,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#ef4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: '0 4px 16px rgba(239,68,68,0.5)',
+      },
+    }),
   },
-  endCallIconContainer: {
-    backgroundColor: '#ef4444',
+  endCallButtonGradient: {
     width: 80,
     height: 80,
-    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    elevation: 12,
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-  },
-  endCallText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-    marginRight: 8,
-  },
-  recordingText: {
-    color: '#ef4444',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
