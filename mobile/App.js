@@ -13,8 +13,7 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
-  ScrollView,
-  Animated
+  ScrollView
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Audio } from 'expo-av';
@@ -22,7 +21,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { MaterialIcons, Ionicons, Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { db } from './firebaseConfig';
 import {
@@ -42,7 +40,7 @@ import {
   where
 } from 'firebase/firestore';
 
-const ADMIN_PASSWORD = 'Doraemon@2022!';
+const ADMIN_PASSWORD = '1990';
 const USER_PASSWORD = '1964';
 const CLOUDINARY_CLOUD_NAME = 'dujpj0445';
 const CLOUDINARY_UPLOAD_PRESET = 'chat_app_upload';
@@ -52,8 +50,6 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null);
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
 
   // Data State
   const [messages, setMessages] = useState([]);
@@ -72,33 +68,6 @@ export default function App() {
   const recordingRef = useRef(null);
   const recordingIntervalRef = useRef(null);
   const unsubscribeRef = useRef(null);
-
-  // Animation refs
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  // Pulse animation for call recording
-  useEffect(() => {
-    if (isCallActive) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.3,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [isCallActive]);
 
   // Auto-Delete Logic
   const checkAndCleanOldMessages = async (daysOverride) => {
@@ -258,90 +227,70 @@ export default function App() {
     ]);
   };
 
-  // Upload to Cloudinary - FIXED for React Native
+  // Upload to Cloudinary
   const uploadToCloudinary = async (uri, resourceType = 'auto') => {
     try {
       setUploading(true);
-      console.log('Starting upload:', uri, 'Type:', resourceType);
       
-      // Get file info
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      console.log('File info:', fileInfo);
+      const formData = new FormData();
+      const filename = uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image';
 
-      if (!fileInfo.exists) {
-        throw new Error('File does not exist');
-      }
-
-      // Read file as base64
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+      formData.append('file', {
+        uri,
+        name: filename,
+        type,
       });
-
-      // Prepare the data for Cloudinary
-      const uploadData = {
-        file: `data:${resourceType === 'video' ? 'audio/m4a' : 'image/jpeg'};base64,${base64}`,
-        upload_preset: CLOUDINARY_UPLOAD_PRESET,
-      };
-
-      console.log('Uploading to:', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
         {
           method: 'POST',
+          body: formData,
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'multipart/form-data',
           },
-          body: JSON.stringify(uploadData),
         }
       );
 
-      const data = await response.json();
-      console.log('Upload response status:', response.status);
-      console.log('Upload response:', data);
-
-      if (!response.ok || data.error) {
-        console.error('Upload failed:', data);
-        throw new Error(data.error?.message || `Upload failed: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
       }
 
+      const data = await response.json();
       setUploading(false);
-      console.log('Upload successful:', data.secure_url);
       return data.secure_url;
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload failed:', error);
       setUploading(false);
-      Alert.alert('Upload Error', `Failed to upload: ${error.message}`);
+      Alert.alert('Error', 'Upload failed. Please try again.');
       return null;
     }
   };
 
-  // Authentication with improved error handling
+  // Authentication
   const handleUnifiedLogin = () => {
     const trimmedPassword = password.trim();
     
     if (trimmedPassword === ADMIN_PASSWORD) {
-      setPasswordError('');
       setIsLoggedIn(true);
       setUserType('admin');
       setPassword('');
     } else if (trimmedPassword === USER_PASSWORD) {
-      setPasswordError('');
       setIsLoggedIn(true);
       setUserType('user');
       setPassword('');
     } else {
-      // Show error message
-      setPasswordError('Invalid password. Please try again.');
+      // Show error alert
+      Alert.alert(
+        'Incorrect Password',
+        'Please check your password and try again.',
+        [{ text: 'OK' }]
+      );
+      // Clear password field
       setPassword('');
-      
-      // Shake animation
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
     }
   };
 
@@ -360,7 +309,6 @@ export default function App() {
       setIsLoggedIn(false);
       setUserType(null);
       setPassword('');
-      setPasswordError('');
       setMessages([]);
       setLoadingMessages(false);
       setNewMessage('');
@@ -395,7 +343,7 @@ export default function App() {
     }
   };
 
-  // Pick and Upload Image - FIXED
+  // Pick and Upload Image
   const handleImagePicker = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -406,12 +354,9 @@ export default function App() {
 
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
-        console.log('Image selected:', uri);
-        
         const fileUrl = await uploadToCloudinary(uri, 'image');
 
         if (fileUrl) {
-          console.log('Image uploaded successfully:', fileUrl);
           await addDoc(collection(db, 'messages'), {
             fileName: uri.split('/').pop(),
             fileData: fileUrl,
@@ -422,7 +367,6 @@ export default function App() {
             type: 'file',
             status: 'sent',
           });
-          Alert.alert('Success', 'Image uploaded successfully');
         }
       }
     } catch (error) {
@@ -431,7 +375,7 @@ export default function App() {
     }
   };
 
-  // Voice Recording - Auto start on call
+  // Voice Recording
   const startCall = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -456,9 +400,6 @@ export default function App() {
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
-
-      // Show notification that recording started
-      Alert.alert('Recording Started', 'Call recording is now active', [{ text: 'OK' }]);
     } catch (error) {
       console.error('Microphone error:', error);
       Alert.alert('Error', 'Microphone access denied or not available.');
@@ -468,20 +409,15 @@ export default function App() {
   const endCall = async () => {
     if (recordingRef.current && isCallActive) {
       try {
-        console.log('Stopping recording...');
         await recordingRef.current.stopAndUnloadAsync();
         const uri = recordingRef.current.getURI();
-        console.log('Recording URI:', uri);
-        
         setIsCallActive(false);
         clearInterval(recordingIntervalRef.current);
 
         if (uri) {
-          console.log('Uploading audio to Cloudinary...');
           const audioUrl = await uploadToCloudinary(uri, 'video');
 
           if (audioUrl) {
-            console.log('Audio uploaded successfully:', audioUrl);
             await addDoc(collection(db, 'messages'), {
               audioData: audioUrl,
               duration: recordingTime,
@@ -490,23 +426,13 @@ export default function App() {
               type: 'voice',
               status: 'sent',
             });
-            Alert.alert('Success', 'Call recording saved to chat');
-          } else {
-            Alert.alert('Error', 'Failed to upload recording');
           }
-        } else {
-          Alert.alert('Error', 'No recording found');
         }
 
         setRecordingTime(0);
         recordingRef.current = null;
       } catch (error) {
         console.error('Error ending call:', error);
-        Alert.alert('Error', `Failed to save recording: ${error.message}`);
-        setIsCallActive(false);
-        clearInterval(recordingIntervalRef.current);
-        setRecordingTime(0);
-        recordingRef.current = null;
       }
     }
   };
@@ -606,76 +532,33 @@ export default function App() {
     );
   };
 
-  // LOGIN SCREEN - MODERNIZED
+  // LOGIN SCREEN
   if (!isLoggedIn) {
     return (
-      <LinearGradient
-        colors={['#0f766e', '#14b8a6', '#2dd4bf']}
-        style={styles.loginContainer}
-      >
+      <View style={styles.loginContainer}>
         <StatusBar style="light" />
-        <Animated.View 
-          style={[
-            styles.loginCard,
-            { transform: [{ translateX: shakeAnim }] }
-          ]}
-        >
-          <LinearGradient
-            colors={['#14b8a6', '#0f766e']}
-            style={styles.loginIcon}
-          >
-            <Ionicons name="shield-checkmark" size={40} color="#fff" />
-          </LinearGradient>
-
-          <Text style={styles.loginTitle}>Secure Chat</Text>
-          <Text style={styles.loginSubtitle}>Enter your password to continue</Text>
-
-          <View style={styles.passwordInputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.loginInput}
-              placeholder="Enter password"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setPasswordError('');
-              }}
-              onSubmitEditing={handleUnifiedLogin}
-              autoFocus
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-              <Ionicons 
-                name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                size={20} 
-                color="#64748b" 
-              />
-            </TouchableOpacity>
+        <View style={styles.loginCard}>
+          <View style={styles.loginIcon}>
+            <Ionicons name="lock-closed" size={32} color="#fff" />
           </View>
-
-          {passwordError ? (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{passwordError}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity style={styles.loginButtonWrapper} onPress={handleUnifiedLogin}>
-            <LinearGradient
-              colors={['#14b8a6', '#0d9488']}
-              style={styles.loginButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.loginButtonText}>Unlock</Text>
-              <Ionicons name="arrow-forward" size={20} color="#fff" />
-            </LinearGradient>
+          <Text style={styles.loginTitle}>Secure Login</Text>
+          <Text style={styles.loginSubtitle}>Enter your access key to continue</Text>
+          <TextInput
+            style={styles.loginInput}
+            placeholder="Password"
+            placeholderTextColor="#999"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleUnifiedLogin}
+            autoFocus
+          />
+          <TouchableOpacity style={styles.loginButton} onPress={handleUnifiedLogin}>
+            <Text style={styles.loginButtonText}>Login</Text>
           </TouchableOpacity>
-
-          <Text style={styles.loginHint}>Secure end-to-end encrypted chat</Text>
-        </Animated.View>
-      </LinearGradient>
+          <Text style={styles.loginHint}>Admin: admin123 | User: user123</Text>
+        </View>
+      </View>
     );
   }
 
@@ -683,73 +566,40 @@ export default function App() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <StatusBar style="light" />
 
       {/* Call Overlay */}
       {isCallActive && (
         <Modal visible={isCallActive} animationType="fade">
-          <LinearGradient
-            colors={['#1f2937', '#111827']}
-            style={styles.callOverlay}
-          >
+          <View style={styles.callOverlay}>
             <View style={styles.callContent}>
-              <Animated.View 
-                style={[
-                  styles.callAvatar,
-                  { transform: [{ scale: pulseAnim }] }
-                ]}
-              >
-                <LinearGradient
-                  colors={['#ef4444', '#dc2626']}
-                  style={styles.callAvatarGradient}
-                >
-                  <Text style={styles.callAvatarText}>{userType === 'admin' ? 'U' : 'A'}</Text>
-                </LinearGradient>
-              </Animated.View>
-              
-              <View style={styles.recordingBadge}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>RECORDING</Text>
+              <View style={styles.callAvatar}>
+                <Text style={styles.callAvatarText}>{userType === 'admin' ? 'U' : 'A'}</Text>
               </View>
-
               <Text style={styles.callTitle}>Voice Call Active</Text>
               <Text style={styles.callTimer}>{formatDuration(recordingTime)}</Text>
             </View>
-            
             <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-              <LinearGradient
-                colors={['#ef4444', '#dc2626']}
-                style={styles.endCallButtonGradient}
-              >
-                <Ionicons name="call" size={36} color="#fff" />
-              </LinearGradient>
+              <Ionicons name="call" size={40} color="#fff" />
             </TouchableOpacity>
-          </LinearGradient>
+          </View>
         </Modal>
       )}
 
-      {/* Header - MODERNIZED */}
-      <LinearGradient
-        colors={['#0f766e', '#14b8a6']}
-        style={styles.header}
-      >
+      {/* Header */}
+      <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <LinearGradient
-            colors={['#ffffff', '#f0fdfa']}
-            style={styles.avatar}
-          >
+          <View style={styles.avatar}>
             <Text style={styles.avatarText}>{userType === 'admin' ? 'A' : 'U'}</Text>
-          </LinearGradient>
+          </View>
           <View>
             <Text style={styles.headerTitle}>
-              {userType === 'admin' ? 'Admin Control' : 'Secure Chat'}
+              {userType === 'admin' ? 'Admin Control' : 'Lineage'}
             </Text>
-            <Text style={styles.headerSubtitle}>
-              {isCallActive ? '🔴 Recording...' : `Disappearing: ${autoDeleteDays} days`}
-            </Text>
+            <Text style={styles.headerSubtitle}>Disappearing: {autoDeleteDays} days</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -758,27 +608,21 @@ export default function App() {
               style={styles.headerButton}
               onPress={() => setShowSettings(!showSettings)}
             >
-              <Ionicons name="settings-outline" size={22} color="#fff" />
+              <Ionicons name="settings-sharp" size={24} color="#fff" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity 
-            style={[styles.headerButton, isCallActive && styles.headerButtonActive]} 
-            onPress={isCallActive ? endCall : startCall}
-          >
-            <Ionicons name={isCallActive ? "call" : "call-outline"} size={22} color="#fff" />
+          <TouchableOpacity style={styles.headerButton} onPress={startCall}>
+            <Ionicons name="call" size={24} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={22} color="#fff" />
+            <MaterialIcons name="logout" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* Settings Panel */}
       {showSettings && userType === 'admin' && (
-        <LinearGradient
-          colors={['#0d9488', '#0f766e']}
-          style={styles.settingsPanel}
-        >
+        <View style={styles.settingsPanel}>
           <Text style={styles.settingsTitle}>AUTO-DELETE MESSAGES AFTER:</Text>
           <View style={styles.settingsButtons}>
             {[1, 3, 7, 30].map((day) => (
@@ -801,7 +645,7 @@ export default function App() {
               </TouchableOpacity>
             ))}
           </View>
-        </LinearGradient>
+        </View>
       )}
 
       {/* Messages Area */}
@@ -813,9 +657,8 @@ export default function App() {
           </View>
         ) : messages.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e1" />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>Send a message to start the conversation</Text>
+            <Text style={styles.emptyText}>No messages yet.</Text>
+            <Text style={styles.emptySubtext}>Send a message to start the chat.</Text>
           </View>
         ) : (
           <FlatList
@@ -825,25 +668,26 @@ export default function App() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesList}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
           />
         )}
       </View>
 
-      {/* Input Area - MODERNIZED */}
+      {/* Input Area */}
       <View style={styles.inputContainer}>
         <TouchableOpacity
           style={styles.inputButton}
           onPress={handleImagePicker}
           disabled={uploading}
         >
-          <Ionicons name="image-outline" size={24} color={uploading ? '#ccc' : '#0f766e'} />
+          <Ionicons name="image-outline" size={24} color={uploading ? '#ccc' : '#666'} />
         </TouchableOpacity>
 
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
-            placeholder={uploading ? 'Uploading...' : 'Type a message...'}
-            placeholderTextColor="#94a3b8"
+            placeholder={uploading ? 'Uploading...' : 'Message'}
+            placeholderTextColor="#999"
             value={newMessage}
             onChangeText={setNewMessage}
             multiline
@@ -860,12 +704,7 @@ export default function App() {
           onPress={handleSendMessage}
           disabled={!newMessage.trim() || uploading}
         >
-          <LinearGradient
-            colors={newMessage.trim() && !uploading ? ['#14b8a6', '#0f766e'] : ['#d1d5db', '#d1d5db']}
-            style={styles.sendButtonGradient}
-          >
-            <Ionicons name="send" size={20} color="#fff" />
-          </LinearGradient>
+          <Ionicons name="send" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -889,140 +728,88 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#1f2937',
     padding: 20,
   },
   loginCard: {
     backgroundColor: '#fff',
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 32,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
   },
   loginIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    backgroundColor: '#0f766e',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginBottom: 16,
   },
   loginTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1f2937',
     marginBottom: 8,
   },
   loginSubtitle: {
-    fontSize: 15,
-    color: '#64748b',
-    marginBottom: 32,
-  },
-  passwordInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-  },
-  inputIcon: {
-    marginRight: 8,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 24,
   },
   loginInput: {
-    flex: 1,
-    height: 56,
-    fontSize: 16,
-    color: '#1f2937',
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fee2e2',
-    padding: 12,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     borderRadius: 8,
-    width: '100%',
+    padding: 12,
     marginBottom: 16,
-  },
-  errorText: {
-    color: '#dc2626',
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  loginButtonWrapper: {
-    width: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    fontSize: 16,
   },
   loginButton: {
-    flexDirection: 'row',
+    backgroundColor: '#0f766e',
+    width: '100%',
+    padding: 14,
+    borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
+    marginBottom: 16,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   loginHint: {
-    fontSize: 13,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#6b7280',
   },
   header: {
+    backgroundColor: '#0f766e',
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 4,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#fff',
   },
   avatarText: {
     color: '#0f766e',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   headerTitle: {
@@ -1031,9 +818,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#ccfbf1',
+    color: '#a7f3d0',
     fontSize: 12,
-    marginTop: 2,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1041,18 +827,10 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
     marginLeft: 4,
-    borderRadius: 8,
-  },
-  headerButtonActive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.3)',
   },
   settingsPanel: {
+    backgroundColor: '#0d9488',
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   settingsTitle: {
     color: '#fff',
@@ -1067,12 +845,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   settingsButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: '#115e59',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   settingsButtonActive: {
     backgroundColor: '#fff',
@@ -1080,7 +856,7 @@ const styles = StyleSheet.create({
   settingsButtonText: {
     color: '#ccfbf1',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   settingsButtonTextActive: {
     color: '#0d9488',
@@ -1102,19 +878,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    margin: 20,
+    borderRadius: 12,
     padding: 24,
   },
   emptyText: {
-    color: '#475569',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '500',
   },
   emptySubtext: {
-    color: '#94a3b8',
+    color: '#999',
     fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
+    marginTop: 4,
   },
   messagesList: {
     paddingHorizontal: 16,
@@ -1132,30 +909,25 @@ const styles = StyleSheet.create({
   messageBubble: {
     maxWidth: '85%',
     padding: 12,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 8,
   },
   bubbleSent: {
     backgroundColor: '#d9fdd3',
-    borderTopRightRadius: 4,
+    borderTopRightRadius: 0,
   },
   bubbleReceived: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 4,
+    borderTopLeftRadius: 0,
   },
   messageText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#1f2937',
     lineHeight: 20,
   },
   messageImage: {
     width: 200,
     height: 200,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 4,
   },
   fileContainer: {
@@ -1210,49 +982,40 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   inputContainer: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 12,
+    backgroundColor: '#f0f2f5',
+    paddingHorizontal: 16,
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
   },
   inputButton: {
-    padding: 10,
-    borderRadius: 24,
-    backgroundColor: '#fff',
-    marginRight: 8,
+    padding: 8,
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 24,
+    borderRadius: 20,
+    marginHorizontal: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 8,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
   },
   input: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#1f2937',
     maxHeight: 100,
   },
   sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendButtonGradient: {
-    width: '100%',
-    height: '100%',
+    backgroundColor: '#0f766e',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#d1d5db',
   },
   uploadingIndicator: {
     position: 'absolute',
@@ -1262,93 +1025,94 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   uploadingText: {
     color: '#fff',
     fontSize: 14,
     marginLeft: 8,
-    fontWeight: '500',
   },
   callOverlay: {
     flex: 1,
+    backgroundColor: '#1f2937',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 80,
+    paddingVertical: 60,
   },
   callContent: {
     alignItems: 'center',
   },
   callAvatar: {
-    marginBottom: 32,
-  },
-  callAvatarGradient: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#374151',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 6,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: 4,
+    borderColor: '#0f766e',
+    marginBottom: 24,
   },
   callAvatarText: {
-    fontSize: 56,
+    fontSize: 48,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  recordingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 24,
-    gap: 8,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ef4444',
-  },
-  recordingText: {
-    color: '#fee2e2',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 1,
   },
   callTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   callTimer: {
-    fontSize: 48,
+    fontSize: 32,
     color: '#5eead4',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontWeight: 'bold',
   },
   endCallButton: {
-    borderRadius: 40,
-    overflow: 'hidden',
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  endCallButtonGradient: {
+  endCallIconContainer: {
+    backgroundColor: '#ef4444',
     width: 80,
     height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
+    elevation: 12,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
+  endCallText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+    marginRight: 8,
+  },
+  recordingText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

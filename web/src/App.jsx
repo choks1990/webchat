@@ -36,7 +36,7 @@ const EncryptedChat = () => {
   const recordingIntervalRef = useRef(null);
   const unsubscribeRef = useRef(null); 
 
-  const ADMIN_PASSWORD = 'Doraemon@2022!';
+  const ADMIN_PASSWORD = '1990';
   const USER_PASSWORD = '1964';
 
   // --- 1. INITIALIZATION & CLEANUP ---
