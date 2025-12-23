@@ -1,4 +1,4 @@
-// web/src/App.jsx - OPTIMIZED VERSION
+// Simplified UI for elderly users - Enhanced version
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon, Check, CheckCheck 
+  Trash2, Settings, Image, Check, CheckCheck, X 
 } from 'lucide-react';
 
 const EncryptedChat = () => {
@@ -46,7 +46,7 @@ const EncryptedChat = () => {
     if (isLoggedIn && userType) {
       setLoadingMessages(true);
 
-      // A. Load Settings (non-blocking, parallel)
+      // A. Load Settings
       const fetchSettings = async () => {
         try {
           const docRef = doc(db, "settings", "config");
@@ -60,23 +60,20 @@ const EncryptedChat = () => {
           console.error("Error fetching settings:", error);
         }
       };
-      fetchSettings(); // Don't await - run in parallel
+      fetchSettings();
 
-      // B. OPTIMIZED: Use desc order with limit (much faster than limitToLast)
-      // This queries the NEWEST messages first, which is indexed by default
+      // B. Query messages
       const q = query(
         collection(db, "messages"), 
-        orderBy("timestamp", "desc"), // DESC is faster - uses default index
+        orderBy("timestamp", "desc"),
         limit(25)
       );
       
       unsubscribe = onSnapshot(q, 
         async (snapshot) => {
-          // Reverse the array since we queried desc but want to display asc
           const msgs = snapshot.docs.reverse().map(docSnap => {
             const data = docSnap.data();
             
-            // Robust timestamp handling
             let time = Date.now();
             if (data.timestamp?.toMillis) {
               time = data.timestamp.toMillis();
@@ -90,7 +87,7 @@ const EncryptedChat = () => {
           setMessages(msgs);
           setLoadingMessages(false);
           
-          // OPTIMIZED: Mark as read in background (non-blocking)
+          // Mark as read in background
           const updatePromises = snapshot.docs
             .filter(docSnap => {
               const msg = docSnap.data();
@@ -101,7 +98,6 @@ const EncryptedChat = () => {
             );
           
           if (updatePromises.length > 0) {
-            // Fire and forget - don't block UI
             Promise.all(updatePromises).catch(err => 
               console.error("Error marking messages as read:", err)
             );
@@ -115,7 +111,7 @@ const EncryptedChat = () => {
 
       unsubscribeRef.current = unsubscribe;
 
-      // C. OPTIMIZED: Run cleanup in background after 2 seconds
+      // C. Cleanup old messages
       setTimeout(() => {
         checkAndCleanOldMessages();
       }, 2000);
@@ -148,7 +144,6 @@ const EncryptedChat = () => {
     try {
       await setDoc(doc(db, "settings", "config"), { autoDeleteDays: days });
       setShowSettings(false);
-      // Run cleanup in background
       checkAndCleanOldMessages(days);
     } catch (error) {
       console.error("Error updating settings:", error);
@@ -161,19 +156,16 @@ const EncryptedChat = () => {
       const days = daysOverride || autoDeleteDays;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      
-      // Use Firestore Timestamp for proper comparison
       const cutoffTimestamp = cutoffDate.getTime();
 
       const q = query(
         collection(db, "messages"),
         where("timestamp", "<", cutoffTimestamp),
         orderBy("timestamp", "asc"),
-        limit(100) // Batch delete in chunks
+        limit(100)
       );
       
       const snapshot = await getDocs(q);
-      
       const deletePromises = snapshot.docs.map(docSnap => 
         deleteDoc(doc(db, "messages", docSnap.id))
       );
@@ -409,34 +401,31 @@ const EncryptedChat = () => {
   // --- RENDER: LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-800 to-gray-900">
-        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm mx-4">
-          <div className="flex justify-center mb-6">
-            <div className="bg-teal-600 p-4 rounded-full">
-              <Phone size={32} color="white" />
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+        <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md mx-4">
+          <div className="flex justify-center mb-8">
+            <div className="bg-blue-600 p-6 rounded-full shadow-lg">
+              <Phone size={48} color="white" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">Secure Login</h1>
-          <p className="text-center text-gray-500 text-sm mb-6">Enter your access key to continue</p>
-          <div className="space-y-4">
+          <h1 className="text-3xl font-bold text-center text-gray-800 mb-3">Welcome</h1>
+          <p className="text-center text-gray-600 text-lg mb-8">Please enter your password</p>
+          <div className="space-y-5">
             <input
               type="password"
-              placeholder="Password"
+              placeholder="Enter Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+              className="w-full px-6 py-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               autoFocus
             />
             <button 
               onClick={handleUnifiedLogin} 
-              className="w-full bg-teal-600 text-white py-3 rounded-lg font-bold hover:bg-teal-700 transition shadow-lg"
+              className="w-full bg-blue-600 text-white py-4 rounded-xl text-lg font-bold hover:bg-blue-700 transition shadow-lg active:scale-95"
             >
-              Login
+              Sign In
             </button>
-            <div className="text-center text-xs text-gray-500 mt-4">
-              <p>Welcome</p>
-            </div>
           </div>
         </div>
       </div>
@@ -445,112 +434,121 @@ const EncryptedChat = () => {
 
   // --- RENDER: MAIN APP ---
   return (
-    <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-gray-100 relative">
+    <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-gray-50 relative">
       
-      {/* CALL OVERLAY */}
+      {/* RECORDING OVERLAY - More descriptive for elderly users */}
       {isCallActive && (
-        <div className="absolute inset-0 z-50 bg-gray-900 flex flex-col items-center justify-between py-12">
-          <div className="text-center mt-20">
-            <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse border-4 border-teal-500">
-              <span className="text-5xl font-bold text-white">
-                {userType === 'admin' ? 'U' : 'A'}
-              </span>
+        <div className="absolute inset-0 z-50 bg-gradient-to-b from-red-600 to-red-700 flex flex-col items-center justify-between py-12">
+          <div className="text-center mt-20 px-4">
+            <div className="w-40 h-40 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse border-4 border-white shadow-2xl">
+              <Mic size={64} className="text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Voice Call Active</h2>
-            <p className="text-teal-400 font-mono text-3xl">{formatDuration(recordingTime)}</p>
+            <h2 className="text-3xl font-bold text-white mb-4">Recording Voice Message</h2>
+            <p className="text-white/90 text-xl mb-6">Speak clearly into your microphone</p>
+            <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-8 py-4 inline-block">
+              <p className="text-white font-mono text-5xl font-bold">{formatDuration(recordingTime)}</p>
+            </div>
           </div>
-          <div className="mb-10">
+          <div className="mb-10 text-center">
             <button 
               onClick={endCall} 
-              className="bg-red-600 p-6 rounded-full hover:bg-red-700 shadow-xl transform hover:scale-105 transition"
+              className="bg-white text-red-600 px-8 py-5 rounded-2xl hover:bg-gray-100 shadow-2xl transform hover:scale-105 transition font-bold text-xl flex items-center gap-3"
             >
-              <PhoneOff size={40} fill="white" />
+              <PhoneOff size={32} />
+              <span>Stop Recording</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* HEADER */}
-      <div className="bg-teal-600 text-white p-4 flex items-center justify-between shadow-md z-10">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white text-teal-600 rounded-full flex items-center justify-center font-bold shadow-sm">
-            {userType === 'admin' ? 'A' : 'U'}
+      {/* HEADER - Simplified with larger text */}
+      <div className="bg-blue-600 text-white p-5 shadow-lg z-10">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-2xl shadow-md">
+              {userType === 'admin' ? 'A' : 'U'}
+            </div>
+            <div>
+              <h2 className="font-bold text-2xl">
+                {userType === 'admin' ? 'Admin' : 'Chat'}
+              </h2>
+              <p className="text-base text-blue-100">
+                Messages delete after {autoDeleteDays} days
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-lg">
-              {userType === 'admin' ? 'Admin Control' : 'Secure Chat'}
-            </h2>
-            <p className="text-xs text-teal-100 opacity-90">
-              Disappearing: {autoDeleteDays} days
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-1">
-          {userType === 'admin' && (
+          
+          <div className="flex items-center gap-3">
+            {userType === 'admin' && (
+              <button 
+                onClick={() => setShowSettings(!showSettings)} 
+                className="flex items-center gap-2 px-4 py-3 hover:bg-blue-700 rounded-xl transition text-base font-medium"
+                title="Settings"
+              >
+                <Settings size={24} />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            )}
             <button 
-              onClick={() => setShowSettings(!showSettings)} 
-              className="p-2 hover:bg-teal-700 rounded-full transition"
-              title="Settings"
+              onClick={handleLogout} 
+              className="flex items-center gap-2 px-4 py-3 hover:bg-blue-700 rounded-xl transition text-base font-medium"
+              title="Sign Out"
             >
-              <Settings size={22} />
+              <LogOut size={24} />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
-          )}
-          <button 
-            onClick={startCall} 
-            className="p-2 hover:bg-teal-700 rounded-full transition"
-            title="Start voice call"
-            disabled={isCallActive}
-          >
-            <Phone size={22} />
-          </button>
-          <button 
-            onClick={handleLogout} 
-            className="p-2 hover:bg-teal-700 rounded-full transition"
-            title="Logout"
-          >
-            <LogOut size={22} />
-          </button>
+          </div>
         </div>
       </div>
 
-      {/* SETTINGS (Admin Only) */}
+      {/* SETTINGS - Larger, clearer */}
       {showSettings && userType === 'admin' && (
-        <div className="bg-teal-700 text-white p-4 absolute top-16 right-0 left-0 z-20 shadow-xl border-b border-teal-500">
-          <p className="font-semibold mb-3 text-sm uppercase tracking-wide">
-            Auto-Delete Messages After:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {[1, 3, 7, 30].map(day => (
+        <div className="bg-blue-700 text-white p-6 absolute top-24 right-0 left-0 z-20 shadow-2xl">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex justify-between items-center mb-4">
+              <p className="font-bold text-xl">
+                Auto-Delete Settings
+              </p>
               <button 
-                key={day} 
-                onClick={() => updateAutoDeleteSettings(day)} 
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-                  autoDeleteDays === day 
-                    ? 'bg-white text-teal-700' 
-                    : 'bg-teal-800 text-teal-100 hover:bg-teal-600'
-                }`}
+                onClick={() => setShowSettings(false)}
+                className="p-2 hover:bg-blue-600 rounded-lg"
               >
-                {day} Day{day > 1 ? 's' : ''}
+                <X size={24} />
               </button>
-            ))}
+            </div>
+            <p className="text-blue-100 mb-4 text-base">Messages will automatically delete after:</p>
+            <div className="flex flex-wrap gap-3">
+              {[1, 3, 7, 30].map(day => (
+                <button 
+                  key={day} 
+                  onClick={() => updateAutoDeleteSettings(day)} 
+                  className={`px-6 py-3 rounded-xl text-lg font-bold transition ${
+                    autoDeleteDays === day 
+                      ? 'bg-white text-blue-700 shadow-lg' 
+                      : 'bg-blue-800 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  {day} Day{day > 1 ? 's' : ''}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* MESSAGES AREA */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#e5ded8]">
+      {/* MESSAGES AREA - Larger text, better spacing */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gradient-to-b from-gray-50 to-gray-100">
         
         {loadingMessages ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-3">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-300 border-t-teal-600"></div>
-            <p className="text-gray-500 text-sm font-medium animate-pulse">Loading messages...</p>
+          <div className="flex flex-col items-center justify-center h-full space-y-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-300 border-t-blue-600"></div>
+            <p className="text-gray-600 text-xl font-medium">Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center bg-white/50 p-6 rounded-xl backdrop-blur-sm">
-              <p className="text-gray-600 font-medium">No messages yet.</p>
-              <p className="text-gray-400 text-sm mt-1">Send a message to start the chat.</p>
+            <div className="text-center bg-white p-10 rounded-2xl shadow-lg max-w-md">
+              <p className="text-gray-700 font-bold text-2xl mb-3">No messages yet</p>
+              <p className="text-gray-500 text-lg">Start a conversation by typing below</p>
             </div>
           </div>
         ) : (
@@ -562,16 +560,16 @@ const EncryptedChat = () => {
               }`}
             >
               <div 
-                className={`relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-lg shadow-sm group ${
+                className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl shadow-md group ${
                   msg.sender === userType 
-                    ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' 
-                    : 'bg-white text-gray-800 rounded-tl-none'
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-white text-gray-800 border-2 border-gray-200'
                 }`}
               >
                 
-                {/* TEXT MESSAGE */}
+                {/* TEXT MESSAGE - Larger font */}
                 {msg.type === 'text' && (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                  <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
                     {msg.text}
                   </p>
                 )}
@@ -583,17 +581,17 @@ const EncryptedChat = () => {
                       <img 
                         src={msg.fileData} 
                         alt="Shared" 
-                        className="rounded-lg max-h-60 object-cover w-full cursor-pointer hover:opacity-95" 
+                        className="rounded-xl max-h-72 object-cover w-full cursor-pointer hover:opacity-95 border-2 border-white/20" 
                         onClick={() => window.open(msg.fileData, '_blank')} 
                       />
                     ) : (
-                      <div className="flex items-center space-x-3 bg-black/5 p-2 rounded-md mb-1">
-                        <div className="bg-teal-500 p-2 rounded-full text-white">
-                          <Paperclip size={16} />
+                      <div className="flex items-center space-x-3 bg-black/5 p-3 rounded-xl mb-2">
+                        <div className="bg-blue-500 p-3 rounded-full text-white">
+                          <Paperclip size={20} />
                         </div>
                         <div className="overflow-hidden flex-1">
-                          <p className="text-sm font-semibold truncate">{msg.fileName}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-base font-semibold truncate">{msg.fileName}</p>
+                          <p className="text-sm text-gray-500">
                             {Math.round(msg.fileSize/1024)} KB
                           </p>
                         </div>
@@ -601,56 +599,59 @@ const EncryptedChat = () => {
                           href={msg.fileData} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="text-teal-600 hover:text-teal-700"
+                          className="text-blue-600 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg"
                         >
-                          <Download size={18} />
+                          <Download size={24} />
                         </a>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* VOICE MESSAGE */}
+                {/* VOICE MESSAGE - Clearer label */}
                 {msg.type === 'voice' && (
-                  <div className="flex items-center gap-3 min-w-[200px]">
-                    <div className="text-gray-500"><Mic size={20} /></div>
-                    <div className="flex-1">
-                      <audio 
-                        controls 
-                        src={msg.audioData} 
-                        className="h-8 w-full max-w-[200px]"
-                        preload="metadata"
-                      />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                      <Mic size={18} />
+                      <span>Voice Message</span>
                     </div>
-                    <span className="text-xs text-gray-500 font-mono">
-                      {formatDuration(msg.duration)}
-                    </span>
+                    <audio 
+                      controls 
+                      src={msg.audioData} 
+                      className="w-full max-w-[300px]"
+                      preload="metadata"
+                      style={{ height: '40px' }}
+                    />
+                    <p className="text-xs opacity-75">
+                      Duration: {formatDuration(msg.duration)}
+                    </p>
                   </div>
                 )}
                 
-                {/* MESSAGE FOOTER (Time + Status) */}
-                <div className="text-[10px] text-gray-500 text-right mt-1 flex justify-end items-center gap-1">
-                  {formatTime(msg.timestamp)}
+                {/* MESSAGE FOOTER */}
+                <div className={`text-xs mt-2 flex justify-end items-center gap-2 ${
+                  msg.sender === userType ? 'text-white/80' : 'text-gray-500'
+                }`}>
+                  <span className="font-medium">{formatTime(msg.timestamp)}</span>
                   
-                  {/* READ RECEIPTS (for sender only) */}
                   {msg.sender === userType && (
-                    <span className="ml-1">
+                    <span>
                       {msg.status === 'read' ? (
-                        <CheckCheck size={14} className="text-blue-500" />
+                        <CheckCheck size={16} className="text-white" />
                       ) : (
-                        <Check size={14} className="text-gray-500" />
+                        <Check size={16} className="text-white/60" />
                       )}
                     </span>
                   )}
 
-                  {/* DELETE BUTTON (admin only) */}
                   {userType === 'admin' && (
-                    <Trash2 
-                      size={12} 
-                      className="cursor-pointer text-red-400 hover:text-red-600 ml-2 opacity-0 group-hover:opacity-100 transition" 
+                    <button
                       onClick={() => deleteMessage(msg.id)}
+                      className="p-1 hover:bg-red-500/20 rounded opacity-0 group-hover:opacity-100 transition"
                       title="Delete message"
-                    />
+                    >
+                      <Trash2 size={14} className="text-red-500" />
+                    </button>
                   )}
                 </div>
               </div>
@@ -660,58 +661,78 @@ const EncryptedChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* INPUT AREA */}
-      <div className="bg-[#f0f2f5] px-4 py-2 flex items-center space-x-2">
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={handleFileUpload} 
-          className="hidden" 
-          accept="image/*,application/pdf,.doc,.docx"
-          disabled={uploading}
-        />
-        <button 
-          onClick={() => fileInputRef.current?.click()} 
-          className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition disabled:opacity-50"
-          disabled={uploading}
-          title="Attach file"
-        >
-          <ImageIcon size={24} />
-        </button>
-        
-        <div className="flex-1 bg-white rounded-full flex items-center px-4 py-2 shadow-sm border border-gray-100">
-          <input 
-            type="text" 
-            value={newMessage} 
-            onChange={(e) => setNewMessage(e.target.value)} 
-            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
-            placeholder={uploading ? "Uploading..." : "Message"} 
-            disabled={uploading} 
-            className="flex-1 focus:outline-none text-gray-700 bg-transparent" 
-            maxLength={1000}
-          />
+      {/* INPUT AREA - Larger buttons with labels */}
+      <div className="bg-white border-t-2 border-gray-200 px-5 py-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Top Row: Voice Record and Attach Photo */}
+          <div className="flex gap-3 mb-3">
+            <button 
+              onClick={startCall} 
+              disabled={isCallActive}
+              className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-xl font-bold text-base hover:from-red-600 hover:to-red-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              title="Record a voice message"
+            >
+              <Mic size={24} />
+              <span>Record Voice Message</span>
+            </button>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              className="hidden" 
+              accept="image/*,application/pdf,.doc,.docx"
+              disabled={uploading}
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={uploading}
+              className="bg-blue-500 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+              title="Attach a photo or file"
+            >
+              <Image size={24} />
+              <span className="hidden sm:inline">Attach Photo</span>
+            </button>
+          </div>
+
+          {/* Bottom Row: Text Input and Send */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-gray-100 rounded-xl flex items-center px-5 py-3 border-2 border-gray-200">
+              <input 
+                type="text" 
+                value={newMessage} 
+                onChange={(e) => setNewMessage(e.target.value)} 
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
+                placeholder={uploading ? "Uploading..." : "Type your message..."} 
+                disabled={uploading} 
+                className="flex-1 focus:outline-none text-gray-800 bg-transparent text-base" 
+                maxLength={1000}
+              />
+            </div>
+            
+            <button 
+              onClick={handleSendMessage} 
+              disabled={uploading || !newMessage.trim()} 
+              className={`px-8 py-4 rounded-xl font-bold text-base transition shadow-lg flex items-center gap-2 ${
+                newMessage.trim() && !uploading
+                  ? 'bg-green-500 text-white hover:bg-green-600' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title="Send message"
+            >
+              <Send size={24} />
+              <span className="hidden sm:inline">Send</span>
+            </button>
+          </div>
         </div>
-        
-        <button 
-          onClick={handleSendMessage} 
-          disabled={uploading || !newMessage.trim()} 
-          className={`p-3 rounded-full shadow-md transition ${
-            newMessage.trim() && !uploading
-              ? 'bg-teal-600 text-white hover:bg-teal-700' 
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-          title="Send message"
-        >
-          <Send size={20} />
-        </button>
       </div>
 
       {/* UPLOADING INDICATOR */}
       {uploading && (
-        <div className="absolute bottom-20 right-4 bg-teal-600 text-white px-4 py-2 rounded-lg shadow-lg">
-          <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-            <span className="text-sm">Uploading...</span>
+        <div className="absolute bottom-32 right-6 bg-blue-600 text-white px-6 py-4 rounded-2xl shadow-2xl">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-3 border-white border-t-transparent"></div>
+            <span className="text-lg font-medium">Uploading...</span>
           </div>
         </div>
       )}
