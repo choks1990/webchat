@@ -1,4 +1,4 @@
-// Modernized UI for webchat - WhatsApp Style (Family Circle)
+// Modernized UI for webchat - Final Refined Version (Family Circle)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, Plus, MoreVertical
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, MoreVertical, Video
 } from 'lucide-react';
 
 // Helper component to make links clickable
@@ -482,7 +482,18 @@ const EncryptedChat = () => {
           </div>
         </div>
         
-        <div className="flex items-center gap-4 text-gray-600">
+        <div className="flex items-center gap-3 text-gray-600">
+          {/* Call/Record Button at Top Right */}
+          <button 
+            onClick={isCallActive ? stopCall : startCall} 
+            className={`p-2.5 rounded-full transition-all shadow-sm ${
+              isCallActive ? 'bg-red-500 text-white animate-pulse' : 'hover:bg-gray-200 text-gray-600'
+            }`}
+            title={isCallActive ? "Stop Recording" : "Record Voice Message"}
+          >
+            {isCallActive ? <PhoneOff size={20} /> : <Phone size={20} />}
+          </button>
+          
           {userType === 'admin' && (
             <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-gray-200 rounded-full transition-all">
               <Settings size={20} />
@@ -643,20 +654,17 @@ const EncryptedChat = () => {
         </div>
       )}
 
-      {/* INPUT AREA - WhatsApp Style */}
+      {/* INPUT AREA - WhatsApp Style Refined */}
       <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3">
-        <div className="flex items-center gap-1">
-          <button className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-all">
-            <Plus size={24} />
-          </button>
+        <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
           <button 
             onClick={() => fileInputRef.current?.click()} 
             disabled={uploading}
             className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-all"
-            title="Attach Photo"
+            title="Attach File"
           >
-            <ImageIcon size={24} />
+            <Paperclip size={24} />
           </button>
         </div>
 
@@ -673,24 +681,17 @@ const EncryptedChat = () => {
         </div>
 
         <div className="flex items-center">
-          {newMessage.trim() ? (
-            <button 
-              onClick={handleSendMessage} 
-              disabled={uploading} 
-              className="p-3 bg-[#25d366] text-white rounded-full shadow-md hover:bg-[#128c7e] transition-all active:scale-90"
-            >
-              <Send size={20} />
-            </button>
-          ) : (
-            <button 
-              onClick={isCallActive ? stopCall : startCall} 
-              className={`p-3 rounded-full shadow-md transition-all active:scale-90 ${
-                isCallActive ? 'bg-red-500 text-white animate-pulse' : 'bg-[#25d366] text-white hover:bg-[#128c7e]'
-              }`}
-            >
-              {isCallActive ? <PhoneOff size={20} /> : <Mic size={20} />}
-            </button>
-          )}
+          <button 
+            onClick={handleSendMessage} 
+            disabled={uploading || !newMessage.trim()} 
+            className={`p-3 rounded-full shadow-md transition-all active:scale-90 ${
+              newMessage.trim() && !uploading
+                ? 'bg-[#25d366] text-white hover:bg-[#128c7e]' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            <Send size={20} />
+          </button>
         </div>
       </div>
 
