@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Enhanced version
+// Modernized UI for webchat - Version 2 (Indigo/Slate Theme + Photo Previews)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,11 +7,11 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image, Check, CheckCheck, X, Link as LinkIcon
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Link as LinkIcon, Eye
 } from 'lucide-react';
 
 // Helper component to make links clickable
-const LinkifyText = ({ text }) => {
+const LinkifyText = ({ text, isSender }) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
   
@@ -25,7 +25,7 @@ const LinkifyText = ({ text }) => {
               href={part} 
               target="_blank" 
               rel="noopener noreferrer" 
-              className="text-blue-200 underline hover:text-white transition-colors duration-200 break-all"
+              className={`${isSender ? 'text-indigo-100 underline hover:text-white' : 'text-indigo-600 underline hover:text-indigo-800'} transition-colors duration-200 break-all`}
             >
               {part}
             </a>
@@ -54,6 +54,11 @@ const EncryptedChat = () => {
   const [autoDeleteDays, setAutoDeleteDays] = useState(7);
   const [recordingTime, setRecordingTime] = useState(0);
   const [uploading, setUploading] = useState(false);
+  
+  // Preview State
+  const [previewImage, setPreviewImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
 
   // --- REFS ---
   const messagesEndRef = useRef(null);
@@ -73,7 +78,6 @@ const EncryptedChat = () => {
     if (isLoggedIn && userType) {
       setLoadingMessages(true);
 
-      // A. Load Settings
       const fetchSettings = async () => {
         try {
           const docRef = doc(db, "settings", "config");
@@ -89,7 +93,6 @@ const EncryptedChat = () => {
       };
       fetchSettings();
 
-      // B. Query messages
       const q = query(
         collection(db, "messages"), 
         orderBy("timestamp", "desc"),
@@ -100,21 +103,18 @@ const EncryptedChat = () => {
         async (snapshot) => {
           const msgs = snapshot.docs.reverse().map(docSnap => {
             const data = docSnap.data();
-            
             let time = Date.now();
             if (data.timestamp?.toMillis) {
               time = data.timestamp.toMillis();
             } else if (data.timestamp instanceof Date) {
               time = data.timestamp.getTime();
             }
-
             return { id: docSnap.id, ...data, timestamp: time };
           });
           
           setMessages(msgs);
           setLoadingMessages(false);
           
-          // Mark as read in background
           const updatePromises = snapshot.docs
             .filter(docSnap => {
               const msg = docSnap.data();
@@ -138,7 +138,6 @@ const EncryptedChat = () => {
 
       unsubscribeRef.current = unsubscribe;
 
-      // C. Cleanup old messages
       setTimeout(() => {
         checkAndCleanOldMessages();
       }, 2000);
@@ -199,7 +198,6 @@ const EncryptedChat = () => {
 
       if (deletePromises.length > 0) {
         await Promise.all(deletePromises);
-        console.log(`Deleted ${deletePromises.length} old messages`);
       }
     } catch (error) {
       console.error("Error cleaning old messages:", error);
@@ -270,12 +268,10 @@ const EncryptedChat = () => {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
       }
-
       if (isCallActive && mediaRecorderRef.current) {
         mediaRecorderRef.current.stop();
         clearInterval(recordingIntervalRef.current);
       }
-
       setIsLoggedIn(false);
       setUserType(null);
       setPassword('');
@@ -309,11 +305,11 @@ const EncryptedChat = () => {
     } catch (error) {
       console.error("Error sending message:", error);
       setNewMessage(tempMessage); 
-      alert("Failed to send message. Please try again.");
+      alert("Failed to send message.");
     }
   };
 
-  const handleFileUpload = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -323,25 +319,45 @@ const EncryptedChat = () => {
       return;
     }
 
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreviewUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreviewUrl(null);
+    }
+  };
+
+  const cancelFileUpload = () => {
+    setSelectedFile(null);
+    setFilePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const confirmAndUploadFile = async () => {
+    if (!selectedFile) return;
+
     try {
-      const fileUrl = await uploadToCloudinary(file, 'auto');
+      const fileUrl = await uploadToCloudinary(selectedFile, 'auto');
       if (fileUrl) {
         await addDoc(collection(db, "messages"), {
-          fileName: file.name,
+          fileName: selectedFile.name,
           fileData: fileUrl,
-          fileType: file.type,
-          fileSize: file.size,
+          fileType: selectedFile.type,
+          fileSize: selectedFile.size,
           sender: userType,
           timestamp: serverTimestamp(),
           type: 'file',
           status: 'sent'
         });
+        cancelFileUpload();
       }
     } catch (error) {
       console.error("Error uploading file:", error);
       alert("Failed to upload file");
-    } finally {
-      e.target.value = '';
     }
   };
 
@@ -415,30 +431,30 @@ const EncryptedChat = () => {
   // --- RENDER LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md transform transition-all hover:scale-[1.01]">
-          <div className="text-center mb-8">
-            <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone size={40} className="text-blue-600" />
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+        <div className="bg-[#1e293b] p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-700">
+          <div className="text-center mb-10">
+            <div className="bg-indigo-500/10 w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20">
+              <Phone size={48} className="text-indigo-400" />
             </div>
-            <h1 className="text-3xl font-black text-gray-800 mb-2">Secure Chat</h1>
-            <p className="text-gray-500 font-medium">Enter your password to continue</p>
+            <h1 className="text-4xl font-black text-white mb-3 tracking-tight">Family Hub</h1>
+            <p className="text-slate-400 font-medium text-lg">Secure connection for the family</p>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-8">
             <input 
               type="password" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
               onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
-              placeholder="Enter Password" 
-              className="w-full px-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-center tracking-widest"
+              placeholder="Enter Access Code" 
+              className="w-full px-8 py-5 bg-slate-900/50 border-2 border-slate-700 rounded-3xl text-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-center tracking-[0.5em] text-white placeholder:tracking-normal placeholder:text-slate-600"
             />
             <button 
               onClick={handleUnifiedLogin} 
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl text-xl font-bold hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-600/30"
+              className="w-full bg-indigo-600 text-white py-5 rounded-3xl text-xl font-black hover:bg-indigo-500 active:scale-[0.98] transition-all shadow-xl shadow-indigo-600/20"
             >
-              Sign In
+              Enter Chat
             </button>
           </div>
         </div>
@@ -448,73 +464,72 @@ const EncryptedChat = () => {
 
   // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      {/* HEADER - Modernized with glassmorphism effect */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-6 py-4 sticky top-0 z-30">
+    <div className="flex flex-col h-screen bg-[#0f172a] font-sans text-slate-200">
+      {/* HEADER */}
+      <div className="bg-[#1e293b]/80 backdrop-blur-xl border-b border-slate-800 px-6 py-5 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <div className="relative">
-              <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-600/20">
-                <Phone size={24} />
+              <div className="bg-indigo-600 p-3.5 rounded-2xl text-white shadow-lg shadow-indigo-600/20">
+                <Phone size={26} />
               </div>
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+              <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 bg-emerald-500 border-3 border-[#1e293b] rounded-full"></div>
             </div>
             <div>
-              <h2 className="font-black text-xl text-gray-800 leading-tight">Family Chat</h2>
-              <p className="text-sm font-bold text-blue-600 uppercase tracking-wider">
-                {userType === 'admin' ? 'Administrator' : 'Family Member'}
-              </p>
+              <h2 className="font-black text-2xl text-white leading-tight tracking-tight">Family Chat</h2>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">
+                  {userType === 'admin' ? 'Admin Access' : 'Family Member'}
+                </p>
+              </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {userType === 'admin' && (
               <button 
                 onClick={() => setShowSettings(!showSettings)} 
-                className={`p-3 rounded-2xl transition-all ${
-                  showSettings ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'
+                className={`p-3.5 rounded-2xl transition-all ${
+                  showSettings ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:bg-slate-800'
                 }`}
-                title="Settings"
               >
-                <Settings size={24} />
+                <Settings size={26} />
               </button>
             )}
             <button 
               onClick={handleLogout} 
-              className="flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-3 rounded-2xl font-bold hover:bg-red-50 hover:text-red-600 transition-all active:scale-95"
+              className="flex items-center gap-2 bg-slate-800 text-slate-300 px-6 py-3.5 rounded-2xl font-black hover:bg-rose-500/10 hover:text-rose-400 transition-all active:scale-95 border border-slate-700"
             >
-              <LogOut size={20} />
-              <span className="hidden sm:inline">Sign Out</span>
+              <LogOut size={22} />
+              <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* SETTINGS - Modernized overlay */}
+      {/* SETTINGS */}
       {showSettings && userType === 'admin' && (
-        <div className="bg-white border-b border-gray-200 p-6 absolute top-[81px] right-0 left-0 z-20 shadow-xl animate-in slide-in-from-top duration-300">
+        <div className="bg-[#1e293b] border-b border-slate-800 p-8 absolute top-[89px] right-0 left-0 z-20 shadow-2xl animate-in slide-in-from-top duration-300">
           <div className="max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-8">
               <div>
-                <h3 className="font-black text-xl text-gray-800">Auto-Delete Settings</h3>
-                <p className="text-gray-500 font-medium">Messages will be permanently removed after the selected period</p>
+                <h3 className="font-black text-2xl text-white tracking-tight">Message Expiry</h3>
+                <p className="text-slate-400 font-medium">Choose when messages should be automatically deleted</p>
               </div>
-              <button 
-                onClick={() => setShowSettings(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-              >
-                <X size={24} />
+              <button onClick={() => setShowSettings(false)} className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-all">
+                <X size={28} />
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
               {[1, 3, 7, 30].map(day => (
                 <button 
                   key={day} 
                   onClick={() => updateAutoDeleteSettings(day)} 
-                  className={`px-6 py-4 rounded-2xl text-lg font-bold transition-all border-2 ${
+                  className={`px-8 py-5 rounded-[2rem] text-xl font-black transition-all border-2 ${
                     autoDeleteDays === day 
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20' 
-                      : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200 hover:bg-blue-50'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-600/20' 
+                      : 'bg-slate-900/50 text-slate-400 border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5'
                   }`}
                 >
                   {day} Day{day > 1 ? 's' : ''}
@@ -525,105 +540,72 @@ const EncryptedChat = () => {
         </div>
       )}
 
-      {/* MESSAGES AREA - Improved bubbles and spacing */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8F9FC]">
-        
+      {/* MESSAGES AREA */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-[#0f172a]">
         {loadingMessages ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-blue-600"></div>
-            <p className="text-gray-500 font-bold text-lg">Loading messages...</p>
+          <div className="flex flex-col items-center justify-center h-full space-y-6">
+            <div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-800 border-t-indigo-500"></div>
+            <p className="text-slate-500 font-black text-xl tracking-tight">Syncing family messages...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center bg-white p-12 rounded-[40px] shadow-sm border border-gray-100 max-w-md">
-              <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Send size={32} className="text-blue-600" />
+            <div className="text-center bg-[#1e293b] p-16 rounded-[3rem] shadow-xl border border-slate-800 max-w-md">
+              <div className="bg-indigo-500/10 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-indigo-500/20">
+                <Send size={40} className="text-indigo-400" />
               </div>
-              <h3 className="text-gray-800 font-black text-2xl mb-2">No messages yet</h3>
-              <p className="text-gray-500 font-medium">Be the first to say hello to the family!</p>
+              <h3 className="text-white font-black text-3xl mb-3 tracking-tight">Empty Chat</h3>
+              <p className="text-slate-400 font-medium text-lg">Start the conversation with your family!</p>
             </div>
           </div>
         ) : (
           messages.map(msg => (
-            <div 
-              key={msg.id} 
-              className={`flex w-full ${
-                msg.sender === userType ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              <div 
-                className={`relative max-w-[85%] sm:max-w-[70%] px-6 py-4 rounded-[28px] shadow-sm group transition-all hover:shadow-md ${
-                  msg.sender === userType 
-                    ? 'bg-blue-600 text-white rounded-tr-none' 
-                    : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'
-                }`}
-              >
+            <div key={msg.id} className={`flex w-full ${msg.sender === userType ? 'justify-end' : 'justify-start'}`}>
+              <div className={`relative max-w-[85%] sm:max-w-[70%] px-7 py-5 rounded-[2.5rem] shadow-lg group transition-all hover:shadow-indigo-500/5 ${
+                msg.sender === userType 
+                  ? 'bg-indigo-600 text-white rounded-tr-none' 
+                  : 'bg-[#1e293b] text-slate-200 border border-slate-800 rounded-tl-none'
+              }`}>
                 
                 {/* TEXT MESSAGE */}
                 {msg.type === 'text' && (
-                  <div className="text-[17px] leading-relaxed">
-                    {msg.sender === userType ? (
-                      <LinkifyText text={msg.text} />
-                    ) : (
-                      <span className="whitespace-pre-wrap break-words">
-                        {msg.text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
-                          if (part.match(/(https?:\/\/[^\s]+)/g)) {
-                            return (
-                              <a 
-                                key={i} 
-                                href={part} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="text-blue-600 underline hover:text-blue-800 transition-colors duration-200 break-all"
-                              >
-                                {part}
-                              </a>
-                            );
-                          }
-                          return part;
-                        })}
-                      </span>
-                    )}
+                  <div className="text-[18px] leading-relaxed font-medium">
+                    <LinkifyText text={msg.text} isSender={msg.sender === userType} />
                   </div>
                 )}
                 
                 {/* FILE MESSAGE */}
                 {msg.type === 'file' && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {msg.fileType?.startsWith('image/') ? (
-                      <div className="relative group/img">
+                      <div className="relative group/img overflow-hidden rounded-3xl border-2 border-white/10 shadow-2xl">
                         <img 
                           src={msg.fileData} 
                           alt="Shared" 
-                          className="rounded-2xl max-h-80 object-cover w-full cursor-pointer border-2 border-white/10 shadow-sm" 
-                          onClick={() => window.open(msg.fileData, '_blank')} 
+                          className="max-h-96 object-cover w-full cursor-pointer transition-transform duration-500 group-hover/img:scale-105" 
+                          onClick={() => setPreviewImage(msg.fileData)} 
                         />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
-                          <Download size={32} className="text-white" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                          <button onClick={() => setPreviewImage(msg.fileData)} className="bg-white/20 backdrop-blur-md p-4 rounded-full text-white hover:bg-white/30 transition-all">
+                            <Eye size={28} />
+                          </button>
+                          <a href={msg.fileData} target="_blank" rel="noreferrer" className="bg-white/20 backdrop-blur-md p-4 rounded-full text-white hover:bg-white/30 transition-all">
+                            <Download size={28} />
+                          </a>
                         </div>
                       </div>
                     ) : (
-                      <div className={`flex items-center space-x-4 p-4 rounded-2xl ${
-                        msg.sender === userType ? 'bg-white/10' : 'bg-gray-50'
-                      }`}>
-                        <div className="bg-blue-500 p-3 rounded-xl text-white shadow-sm">
-                          <Paperclip size={20} />
+                      <div className={`flex items-center space-x-5 p-5 rounded-3xl ${msg.sender === userType ? 'bg-white/10' : 'bg-slate-900/50'}`}>
+                        <div className="bg-indigo-500 p-4 rounded-2xl text-white shadow-lg">
+                          <Paperclip size={24} />
                         </div>
                         <div className="overflow-hidden flex-1">
-                          <p className="text-base font-bold truncate">{msg.fileName}</p>
-                          <p className={`text-sm ${msg.sender === userType ? 'text-blue-100' : 'text-gray-500'}`}>
+                          <p className="text-lg font-black truncate">{msg.fileName}</p>
+                          <p className={`text-sm font-bold ${msg.sender === userType ? 'text-indigo-100' : 'text-slate-500'}`}>
                             {Math.round(msg.fileSize/1024)} KB
                           </p>
                         </div>
-                        <a 
-                          href={msg.fileData} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className={`p-3 rounded-xl transition-all ${
-                            msg.sender === userType ? 'hover:bg-white/20 text-white' : 'hover:bg-blue-50 text-blue-600'
-                          }`}
-                        >
-                          <Download size={24} />
+                        <a href={msg.fileData} target="_blank" rel="noreferrer" className={`p-4 rounded-2xl transition-all ${msg.sender === userType ? 'hover:bg-white/20 text-white' : 'hover:bg-indigo-500/10 text-indigo-400'}`}>
+                          <Download size={28} />
                         </a>
                       </div>
                     )}
@@ -632,45 +614,28 @@ const EncryptedChat = () => {
 
                 {/* VOICE MESSAGE */}
                 {msg.type === 'voice' && (
-                  <div className="space-y-3 min-w-[240px]">
-                    <div className="flex items-center gap-3 text-sm font-bold">
-                      <div className={`p-2 rounded-full ${msg.sender === userType ? 'bg-white/20' : 'bg-blue-50 text-blue-600'}`}>
-                        <Mic size={18} />
+                  <div className="space-y-4 min-w-[260px]">
+                    <div className="flex items-center gap-4 text-sm font-black uppercase tracking-widest">
+                      <div className={`p-2.5 rounded-full ${msg.sender === userType ? 'bg-white/20' : 'bg-indigo-500/10 text-indigo-400'}`}>
+                        <Mic size={20} />
                       </div>
-                      <span>Voice Message • {formatDuration(msg.duration)}</span>
+                      <span>Voice Note • {formatDuration(msg.duration)}</span>
                     </div>
-                    <audio 
-                      controls 
-                      src={msg.audioData} 
-                      className={`w-full h-10 rounded-lg ${msg.sender === userType ? 'brightness-125' : ''}`}
-                      preload="metadata"
-                    />
+                    <audio controls src={msg.audioData} className={`w-full h-11 rounded-xl ${msg.sender === userType ? 'brightness-150' : 'invert opacity-80'}`} preload="metadata" />
                   </div>
                 )}
                 
-                {/* MESSAGE FOOTER */}
-                <div className={`text-[11px] mt-2 flex justify-end items-center gap-2 font-bold uppercase tracking-tighter ${
-                  msg.sender === userType ? 'text-blue-100' : 'text-gray-400'
-                }`}>
+                {/* FOOTER */}
+                <div className={`text-[12px] mt-3 flex justify-end items-center gap-3 font-black uppercase tracking-widest ${msg.sender === userType ? 'text-indigo-100/70' : 'text-slate-500'}`}>
                   <span>{formatTime(msg.timestamp)}</span>
-                  
                   {msg.sender === userType && (
                     <span>
-                      {msg.status === 'read' ? (
-                        <CheckCheck size={14} className="text-white" />
-                      ) : (
-                        <Check size={14} className="text-white/60" />
-                      )}
+                      {msg.status === 'read' ? <CheckCheck size={16} className="text-emerald-400" /> : <Check size={16} className="text-white/40" />}
                     </span>
                   )}
-
                   {userType === 'admin' && (
-                    <button
-                      onClick={() => deleteMessage(msg.id)}
-                      className="ml-2 p-1.5 hover:bg-red-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete message"
-                    >
-                      <Trash2 size={14} className={msg.sender === userType ? 'text-white' : 'text-red-500'} />
+                    <button onClick={() => deleteMessage(msg.id)} className="ml-2 p-2 hover:bg-rose-500/20 rounded-xl opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 size={16} className={msg.sender === userType ? 'text-white' : 'text-rose-500'} />
                     </button>
                   )}
                 </div>
@@ -681,89 +646,116 @@ const EncryptedChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* INPUT AREA - Modernized with better layout */}
-      <div className="bg-white border-t border-gray-200 px-6 py-6 pb-8 sm:pb-6">
+      {/* PHOTO PREVIEW BEFORE SENDING */}
+      {selectedFile && (
+        <div className="bg-[#1e293b] border-t border-slate-800 p-6 animate-in slide-in-from-bottom duration-300">
+          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center gap-6">
+            {filePreviewUrl ? (
+              <img src={filePreviewUrl} alt="Preview" className="w-32 h-32 object-cover rounded-3xl border-4 border-indigo-500/30 shadow-2xl" />
+            ) : (
+              <div className="w-32 h-32 bg-slate-900 rounded-3xl flex items-center justify-center border-4 border-slate-800">
+                <Paperclip size={40} className="text-slate-600" />
+              </div>
+            )}
+            <div className="flex-1 text-center sm:text-left">
+              <h4 className="text-xl font-black text-white mb-1 truncate max-w-xs mx-auto sm:mx-0">{selectedFile.name}</h4>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">{Math.round(selectedFile.size/1024)} KB • Ready to send</p>
+            </div>
+            <div className="flex gap-4 w-full sm:w-auto">
+              <button onClick={cancelFileUpload} className="flex-1 sm:flex-none px-8 py-4 bg-slate-800 text-slate-300 rounded-2xl font-black hover:bg-slate-700 transition-all">Cancel</button>
+              <button onClick={confirmAndUploadFile} className="flex-1 sm:flex-none px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20">Send File</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INPUT AREA */}
+      <div className="bg-[#1e293b] border-t border-slate-800 px-6 py-6 pb-10 sm:pb-6">
         <div className="max-w-6xl mx-auto">
-          {/* Action Row: Voice and Attach */}
-          <div className="flex gap-4 mb-4">
-            {/* Modernized Call/Record Button */}
+          <div className="flex gap-4 mb-5">
             <button 
               onClick={isCallActive ? stopCall : startCall} 
-              className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-[0.98] ${
+              className={`flex-1 flex items-center justify-center gap-4 px-8 py-5 rounded-[2rem] font-black text-xl transition-all shadow-2xl active:scale-[0.98] ${
                 isCallActive 
-                  ? 'bg-red-500 text-white animate-pulse shadow-red-500/30' 
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-600/30 hover:shadow-blue-600/40'
+                  ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/30' 
+                  : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-600/30 hover:shadow-indigo-600/40'
               }`}
             >
               {isCallActive ? (
                 <>
-                  <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
-                  <PhoneOff size={24} />
-                  <span>Stop & Send ({formatDuration(recordingTime)})</span>
+                  <div className="w-4 h-4 bg-white rounded-full animate-ping"></div>
+                  <PhoneOff size={28} />
+                  <span>Stop ({formatDuration(recordingTime)})</span>
                 </>
               ) : (
                 <>
-                  <Mic size={24} />
+                  <Mic size={28} />
                   <span>Record Voice Message</span>
                 </>
               )}
             </button>
             
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-              className="hidden" 
-              accept="image/*,application/pdf,.doc,.docx"
-              disabled={uploading}
-            />
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
             <button 
               onClick={() => fileInputRef.current?.click()} 
               disabled={uploading}
-              className="bg-gray-100 text-gray-700 p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-95 shadow-sm flex items-center gap-2"
-              title="Attach Photo"
+              className="bg-slate-800 text-slate-300 p-5 rounded-[2rem] font-black hover:bg-slate-700 transition-all active:scale-95 border border-slate-700 shadow-lg flex items-center gap-3"
             >
-              <Image size={24} />
-              <span className="hidden md:inline">Photo</span>
+              <ImageIcon size={30} />
+              <span className="hidden md:inline text-lg">Photo</span>
             </button>
           </div>
 
-          {/* Text Input Row */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-gray-50 rounded-2xl flex items-center px-6 py-4 border-2 border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
+          <div className="flex items-center gap-4">
+            <div className="flex-1 bg-slate-900/50 rounded-[2rem] flex items-center px-8 py-5 border-2 border-slate-800 focus-within:border-indigo-500 focus-within:bg-slate-900 transition-all">
               <input 
                 type="text" 
                 value={newMessage} 
                 onChange={(e) => setNewMessage(e.target.value)} 
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
-                placeholder={uploading ? "Uploading file..." : "Type a message..."} 
+                placeholder={uploading ? "Uploading..." : "Type a message..."} 
                 disabled={uploading} 
-                className="flex-1 focus:outline-none text-gray-800 bg-transparent text-lg font-medium" 
+                className="flex-1 focus:outline-none text-white bg-transparent text-xl font-medium placeholder:text-slate-600" 
                 maxLength={1000}
               />
             </div>
-            
             <button 
               onClick={handleSendMessage} 
               disabled={uploading || !newMessage.trim()} 
-              className={`p-5 rounded-2xl transition-all shadow-lg active:scale-90 ${
+              className={`p-6 rounded-[2rem] transition-all shadow-2xl active:scale-90 ${
                 newMessage.trim() && !uploading
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/30' 
+                  : 'bg-slate-800 text-slate-600 cursor-not-allowed'
               }`}
             >
-              <Send size={24} />
+              <Send size={30} />
             </button>
           </div>
         </div>
       </div>
 
+      {/* FULL IMAGE PREVIEW MODAL */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+          <button onClick={() => setPreviewImage(null)} className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
+            <X size={32} />
+          </button>
+          <img src={previewImage} alt="Full Preview" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
+          <div className="mt-8 flex gap-6">
+            <a href={previewImage} download target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-indigo-600 text-white px-10 py-5 rounded-3xl font-black text-xl hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-600/20">
+              <Download size={28} />
+              Save Photo
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* UPLOADING OVERLAY */}
       {uploading && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white p-8 rounded-[32px] shadow-2xl flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-blue-600"></div>
-            <span className="text-xl font-black text-gray-800">Sending File...</span>
+        <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-md z-[110] flex items-center justify-center">
+          <div className="bg-[#1e293b] p-12 rounded-[3rem] shadow-2xl border border-slate-700 flex flex-col items-center gap-6">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-indigo-500/20 border-t-indigo-500"></div>
+            <span className="text-2xl font-black text-white tracking-tight">Sending to Family...</span>
           </div>
         </div>
       )}
