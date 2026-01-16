@@ -1,4 +1,4 @@
-// Simplified UI for elderly users - Enhanced version
+// Modernized UI for webchat - Enhanced version
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,8 +7,35 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image, Check, CheckCheck, X 
+  Trash2, Settings, Image, Check, CheckCheck, X, Link as LinkIcon
 } from 'lucide-react';
+
+// Helper component to make links clickable
+const LinkifyText = ({ text }) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return (
+    <span className="whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+          return (
+            <a 
+              key={i} 
+              href={part} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-200 underline hover:text-white transition-colors duration-200 break-all"
+            >
+              {part}
+            </a>
+          );
+        }
+        return part;
+      })}
+    </span>
+  );
+};
 
 const EncryptedChat = () => {
   // --- STATE ---
@@ -334,62 +361,49 @@ const EncryptedChat = () => {
 
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], "voice_note.webm", { type: "audio/webm" });
-        
-        const audioUrl = await uploadToCloudinary(audioFile, 'video');
+        const audioUrl = await uploadToCloudinary(audioBlob, 'video');
         
         if (audioUrl) {
-          try {
-            await addDoc(collection(db, "messages"), {
-              audioData: audioUrl,
-              duration: recordingTime,
-              sender: userType,
-              timestamp: serverTimestamp(),
-              type: 'voice',
-              status: 'sent'
-            });
-          } catch (error) {
-            console.error("Error saving voice message:", error);
-            alert("Failed to save voice message");
-          }
+          await addDoc(collection(db, "messages"), {
+            audioData: audioUrl,
+            duration: recordingTime,
+            sender: userType,
+            timestamp: serverTimestamp(),
+            type: 'voice',
+            status: 'sent'
+          });
         }
         
         stream.getTracks().forEach(track => track.stop());
-        clearInterval(recordingIntervalRef.current);
+        setIsCallActive(false);
         setRecordingTime(0);
       };
 
       mediaRecorderRef.current.start();
       setIsCallActive(true);
+
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
+
     } catch (error) {
-      console.error("Microphone error:", error);
-      alert('Microphone access denied or not available.');
+      console.error("Error starting call:", error);
+      alert("Could not access microphone");
     }
   };
 
-  const endCall = () => {
+  const stopCall = () => {
     if (mediaRecorderRef.current && isCallActive) {
-      try {
-        mediaRecorderRef.current.stop();
-        setIsCallActive(false);
-      } catch (error) {
-        console.error("Error ending call:", error);
-      }
+      mediaRecorderRef.current.stop();
+      clearInterval(recordingIntervalRef.current);
     }
   };
 
-  // --- UTILS ---
+  // --- HELPERS ---
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
-      return '';
-    }
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDuration = (seconds) => {
@@ -398,31 +412,31 @@ const EncryptedChat = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // --- RENDER: LOGIN ---
+  // --- RENDER LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
-        <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md mx-4">
-          <div className="flex justify-center mb-8">
-            <div className="bg-blue-600 p-6 rounded-full shadow-lg">
-              <Phone size={48} color="white" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md transform transition-all hover:scale-[1.01]">
+          <div className="text-center mb-8">
+            <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Phone size={40} className="text-blue-600" />
             </div>
+            <h1 className="text-3xl font-black text-gray-800 mb-2">Secure Chat</h1>
+            <p className="text-gray-500 font-medium">Enter your password to continue</p>
           </div>
-          <h1 className="text-3xl font-bold text-center text-gray-800 mb-3">Welcome</h1>
-          <p className="text-center text-gray-600 text-lg mb-8">Please enter your password</p>
-          <div className="space-y-5">
-            <input
-              type="password"
-              placeholder="Enter Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+          
+          <div className="space-y-6">
+            <input 
+              type="password" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
               onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
-              className="w-full px-6 py-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              autoFocus
+              placeholder="Enter Password" 
+              className="w-full px-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-center tracking-widest"
             />
             <button 
               onClick={handleUnifiedLogin} 
-              className="w-full bg-blue-600 text-white py-4 rounded-xl text-lg font-bold hover:bg-blue-700 transition shadow-lg active:scale-95"
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl text-xl font-bold hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-600/30"
             >
               Sign In
             </button>
@@ -432,100 +446,75 @@ const EncryptedChat = () => {
     );
   }
 
-  // --- RENDER: MAIN APP ---
+  // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-gray-50 relative">
-      
-      {/* RECORDING OVERLAY - More descriptive for elderly users */}
-      {isCallActive && (
-        <div className="absolute inset-0 z-50 bg-gradient-to-b from-red-600 to-red-700 flex flex-col items-center justify-between py-12">
-          <div className="text-center mt-20 px-4">
-            <div className="w-40 h-40 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse border-4 border-white shadow-2xl">
-              <Mic size={64} className="text-white" />
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-4">Recording Voice Message</h2>
-            <p className="text-white/90 text-xl mb-6">Speak clearly into your microphone</p>
-            <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-8 py-4 inline-block">
-              <p className="text-white font-mono text-5xl font-bold">{formatDuration(recordingTime)}</p>
-            </div>
-          </div>
-          <div className="mb-10 text-center">
-            <button 
-              onClick={endCall} 
-              className="bg-white text-red-600 px-8 py-5 rounded-2xl hover:bg-gray-100 shadow-2xl transform hover:scale-105 transition font-bold text-xl flex items-center gap-3"
-            >
-              <PhoneOff size={32} />
-              <span>Stop Recording</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER - Simplified with larger text */}
-      <div className="bg-blue-600 text-white p-5 shadow-lg z-10">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-2xl shadow-md">
-              {userType === 'admin' ? 'A' : 'U'}
+    <div className="flex flex-col h-screen bg-gray-50 font-sans">
+      {/* HEADER - Modernized with glassmorphism effect */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-6 py-4 sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-600/20">
+                <Phone size={24} />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
             <div>
-              <h2 className="font-bold text-2xl">
-                {userType === 'admin' ? 'Admin' : 'Chat'}
-              </h2>
-              <p className="text-base text-blue-100">
-                Messages delete after {autoDeleteDays} days
+              <h2 className="font-black text-xl text-gray-800 leading-tight">Family Chat</h2>
+              <p className="text-sm font-bold text-blue-600 uppercase tracking-wider">
+                {userType === 'admin' ? 'Administrator' : 'Family Member'}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {userType === 'admin' && (
               <button 
                 onClick={() => setShowSettings(!showSettings)} 
-                className="flex items-center gap-2 px-4 py-3 hover:bg-blue-700 rounded-xl transition text-base font-medium"
+                className={`p-3 rounded-2xl transition-all ${
+                  showSettings ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'
+                }`}
                 title="Settings"
               >
                 <Settings size={24} />
-                <span className="hidden sm:inline">Settings</span>
               </button>
             )}
             <button 
               onClick={handleLogout} 
-              className="flex items-center gap-2 px-4 py-3 hover:bg-blue-700 rounded-xl transition text-base font-medium"
-              title="Sign Out"
+              className="flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-3 rounded-2xl font-bold hover:bg-red-50 hover:text-red-600 transition-all active:scale-95"
             >
-              <LogOut size={24} />
+              <LogOut size={20} />
               <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* SETTINGS - Larger, clearer */}
+      {/* SETTINGS - Modernized overlay */}
       {showSettings && userType === 'admin' && (
-        <div className="bg-blue-700 text-white p-6 absolute top-24 right-0 left-0 z-20 shadow-2xl">
+        <div className="bg-white border-b border-gray-200 p-6 absolute top-[81px] right-0 left-0 z-20 shadow-xl animate-in slide-in-from-top duration-300">
           <div className="max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-4">
-              <p className="font-bold text-xl">
-                Auto-Delete Settings
-              </p>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="font-black text-xl text-gray-800">Auto-Delete Settings</h3>
+                <p className="text-gray-500 font-medium">Messages will be permanently removed after the selected period</p>
+              </div>
               <button 
                 onClick={() => setShowSettings(false)}
-                className="p-2 hover:bg-blue-600 rounded-lg"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
               >
                 <X size={24} />
               </button>
             </div>
-            <p className="text-blue-100 mb-4 text-base">Messages will automatically delete after:</p>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[1, 3, 7, 30].map(day => (
                 <button 
                   key={day} 
                   onClick={() => updateAutoDeleteSettings(day)} 
-                  className={`px-6 py-3 rounded-xl text-lg font-bold transition ${
+                  className={`px-6 py-4 rounded-2xl text-lg font-bold transition-all border-2 ${
                     autoDeleteDays === day 
-                      ? 'bg-white text-blue-700 shadow-lg' 
-                      : 'bg-blue-800 text-white hover:bg-blue-600'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20' 
+                      : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200 hover:bg-blue-50'
                   }`}
                 >
                   {day} Day{day > 1 ? 's' : ''}
@@ -536,19 +525,22 @@ const EncryptedChat = () => {
         </div>
       )}
 
-      {/* MESSAGES AREA - Larger text, better spacing */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gradient-to-b from-gray-50 to-gray-100">
+      {/* MESSAGES AREA - Improved bubbles and spacing */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8F9FC]">
         
         {loadingMessages ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-300 border-t-blue-600"></div>
-            <p className="text-gray-600 text-xl font-medium">Loading messages...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-blue-600"></div>
+            <p className="text-gray-500 font-bold text-lg">Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center bg-white p-10 rounded-2xl shadow-lg max-w-md">
-              <p className="text-gray-700 font-bold text-2xl mb-3">No messages yet</p>
-              <p className="text-gray-500 text-lg">Start a conversation by typing below</p>
+            <div className="text-center bg-white p-12 rounded-[40px] shadow-sm border border-gray-100 max-w-md">
+              <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Send size={32} className="text-blue-600" />
+              </div>
+              <h3 className="text-gray-800 font-black text-2xl mb-2">No messages yet</h3>
+              <p className="text-gray-500 font-medium">Be the first to say hello to the family!</p>
             </div>
           </div>
         ) : (
@@ -560,38 +552,66 @@ const EncryptedChat = () => {
               }`}
             >
               <div 
-                className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl shadow-md group ${
+                className={`relative max-w-[85%] sm:max-w-[70%] px-6 py-4 rounded-[28px] shadow-sm group transition-all hover:shadow-md ${
                   msg.sender === userType 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-white text-gray-800 border-2 border-gray-200'
+                    ? 'bg-blue-600 text-white rounded-tr-none' 
+                    : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'
                 }`}
               >
                 
-                {/* TEXT MESSAGE - Larger font */}
+                {/* TEXT MESSAGE */}
                 {msg.type === 'text' && (
-                  <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
-                    {msg.text}
-                  </p>
+                  <div className="text-[17px] leading-relaxed">
+                    {msg.sender === userType ? (
+                      <LinkifyText text={msg.text} />
+                    ) : (
+                      <span className="whitespace-pre-wrap break-words">
+                        {msg.text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
+                          if (part.match(/(https?:\/\/[^\s]+)/g)) {
+                            return (
+                              <a 
+                                key={i} 
+                                href={part} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-blue-600 underline hover:text-blue-800 transition-colors duration-200 break-all"
+                              >
+                                {part}
+                              </a>
+                            );
+                          }
+                          return part;
+                        })}
+                      </span>
+                    )}
+                  </div>
                 )}
                 
                 {/* FILE MESSAGE */}
                 {msg.type === 'file' && (
-                  <div>
+                  <div className="space-y-2">
                     {msg.fileType?.startsWith('image/') ? (
-                      <img 
-                        src={msg.fileData} 
-                        alt="Shared" 
-                        className="rounded-xl max-h-72 object-cover w-full cursor-pointer hover:opacity-95 border-2 border-white/20" 
-                        onClick={() => window.open(msg.fileData, '_blank')} 
-                      />
+                      <div className="relative group/img">
+                        <img 
+                          src={msg.fileData} 
+                          alt="Shared" 
+                          className="rounded-2xl max-h-80 object-cover w-full cursor-pointer border-2 border-white/10 shadow-sm" 
+                          onClick={() => window.open(msg.fileData, '_blank')} 
+                        />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
+                          <Download size={32} className="text-white" />
+                        </div>
+                      </div>
                     ) : (
-                      <div className="flex items-center space-x-3 bg-black/5 p-3 rounded-xl mb-2">
-                        <div className="bg-blue-500 p-3 rounded-full text-white">
+                      <div className={`flex items-center space-x-4 p-4 rounded-2xl ${
+                        msg.sender === userType ? 'bg-white/10' : 'bg-gray-50'
+                      }`}>
+                        <div className="bg-blue-500 p-3 rounded-xl text-white shadow-sm">
                           <Paperclip size={20} />
                         </div>
                         <div className="overflow-hidden flex-1">
-                          <p className="text-base font-semibold truncate">{msg.fileName}</p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-base font-bold truncate">{msg.fileName}</p>
+                          <p className={`text-sm ${msg.sender === userType ? 'text-blue-100' : 'text-gray-500'}`}>
                             {Math.round(msg.fileSize/1024)} KB
                           </p>
                         </div>
@@ -599,7 +619,9 @@ const EncryptedChat = () => {
                           href={msg.fileData} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="text-blue-600 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg"
+                          className={`p-3 rounded-xl transition-all ${
+                            msg.sender === userType ? 'hover:bg-white/20 text-white' : 'hover:bg-blue-50 text-blue-600'
+                          }`}
                         >
                           <Download size={24} />
                         </a>
@@ -608,38 +630,36 @@ const EncryptedChat = () => {
                   </div>
                 )}
 
-                {/* VOICE MESSAGE - Clearer label */}
+                {/* VOICE MESSAGE */}
                 {msg.type === 'voice' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium mb-2">
-                      <Mic size={18} />
-                      <span>Voice Message</span>
+                  <div className="space-y-3 min-w-[240px]">
+                    <div className="flex items-center gap-3 text-sm font-bold">
+                      <div className={`p-2 rounded-full ${msg.sender === userType ? 'bg-white/20' : 'bg-blue-50 text-blue-600'}`}>
+                        <Mic size={18} />
+                      </div>
+                      <span>Voice Message • {formatDuration(msg.duration)}</span>
                     </div>
                     <audio 
                       controls 
                       src={msg.audioData} 
-                      className="w-full max-w-[300px]"
+                      className={`w-full h-10 rounded-lg ${msg.sender === userType ? 'brightness-125' : ''}`}
                       preload="metadata"
-                      style={{ height: '40px' }}
                     />
-                    <p className="text-xs opacity-75">
-                      Duration: {formatDuration(msg.duration)}
-                    </p>
                   </div>
                 )}
                 
                 {/* MESSAGE FOOTER */}
-                <div className={`text-xs mt-2 flex justify-end items-center gap-2 ${
-                  msg.sender === userType ? 'text-white/80' : 'text-gray-500'
+                <div className={`text-[11px] mt-2 flex justify-end items-center gap-2 font-bold uppercase tracking-tighter ${
+                  msg.sender === userType ? 'text-blue-100' : 'text-gray-400'
                 }`}>
-                  <span className="font-medium">{formatTime(msg.timestamp)}</span>
+                  <span>{formatTime(msg.timestamp)}</span>
                   
                   {msg.sender === userType && (
                     <span>
                       {msg.status === 'read' ? (
-                        <CheckCheck size={16} className="text-white" />
+                        <CheckCheck size={14} className="text-white" />
                       ) : (
-                        <Check size={16} className="text-white/60" />
+                        <Check size={14} className="text-white/60" />
                       )}
                     </span>
                   )}
@@ -647,10 +667,10 @@ const EncryptedChat = () => {
                   {userType === 'admin' && (
                     <button
                       onClick={() => deleteMessage(msg.id)}
-                      className="p-1 hover:bg-red-500/20 rounded opacity-0 group-hover:opacity-100 transition"
+                      className="ml-2 p-1.5 hover:bg-red-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                       title="Delete message"
                     >
-                      <Trash2 size={14} className="text-red-500" />
+                      <Trash2 size={14} className={msg.sender === userType ? 'text-white' : 'text-red-500'} />
                     </button>
                   )}
                 </div>
@@ -661,19 +681,32 @@ const EncryptedChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* INPUT AREA - Larger buttons with labels */}
-      <div className="bg-white border-t-2 border-gray-200 px-5 py-4">
+      {/* INPUT AREA - Modernized with better layout */}
+      <div className="bg-white border-t border-gray-200 px-6 py-6 pb-8 sm:pb-6">
         <div className="max-w-6xl mx-auto">
-          {/* Top Row: Voice Record and Attach Photo */}
-          <div className="flex gap-3 mb-3">
+          {/* Action Row: Voice and Attach */}
+          <div className="flex gap-4 mb-4">
+            {/* Modernized Call/Record Button */}
             <button 
-              onClick={startCall} 
-              disabled={isCallActive}
-              className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-xl font-bold text-base hover:from-red-600 hover:to-red-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-              title="Record a voice message"
+              onClick={isCallActive ? stopCall : startCall} 
+              className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-[0.98] ${
+                isCallActive 
+                  ? 'bg-red-500 text-white animate-pulse shadow-red-500/30' 
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-600/30 hover:shadow-blue-600/40'
+              }`}
             >
-              <Mic size={24} />
-              <span>Record Voice Message</span>
+              {isCallActive ? (
+                <>
+                  <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+                  <PhoneOff size={24} />
+                  <span>Stop & Send ({formatDuration(recordingTime)})</span>
+                </>
+              ) : (
+                <>
+                  <Mic size={24} />
+                  <span>Record Voice Message</span>
+                </>
+              )}
             </button>
             
             <input 
@@ -687,25 +720,25 @@ const EncryptedChat = () => {
             <button 
               onClick={() => fileInputRef.current?.click()} 
               disabled={uploading}
-              className="bg-blue-500 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
-              title="Attach a photo or file"
+              className="bg-gray-100 text-gray-700 p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-95 shadow-sm flex items-center gap-2"
+              title="Attach Photo"
             >
               <Image size={24} />
-              <span className="hidden sm:inline">Attach Photo</span>
+              <span className="hidden md:inline">Photo</span>
             </button>
           </div>
 
-          {/* Bottom Row: Text Input and Send */}
+          {/* Text Input Row */}
           <div className="flex items-center gap-3">
-            <div className="flex-1 bg-gray-100 rounded-xl flex items-center px-5 py-3 border-2 border-gray-200">
+            <div className="flex-1 bg-gray-50 rounded-2xl flex items-center px-6 py-4 border-2 border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
               <input 
                 type="text" 
                 value={newMessage} 
                 onChange={(e) => setNewMessage(e.target.value)} 
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
-                placeholder={uploading ? "Uploading..." : "Type your message..."} 
+                placeholder={uploading ? "Uploading file..." : "Type a message..."} 
                 disabled={uploading} 
-                className="flex-1 focus:outline-none text-gray-800 bg-transparent text-base" 
+                className="flex-1 focus:outline-none text-gray-800 bg-transparent text-lg font-medium" 
                 maxLength={1000}
               />
             </div>
@@ -713,26 +746,24 @@ const EncryptedChat = () => {
             <button 
               onClick={handleSendMessage} 
               disabled={uploading || !newMessage.trim()} 
-              className={`px-8 py-4 rounded-xl font-bold text-base transition shadow-lg flex items-center gap-2 ${
+              className={`p-5 rounded-2xl transition-all shadow-lg active:scale-90 ${
                 newMessage.trim() && !uploading
-                  ? 'bg-green-500 text-white hover:bg-green-600' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
-              title="Send message"
             >
               <Send size={24} />
-              <span className="hidden sm:inline">Send</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* UPLOADING INDICATOR */}
+      {/* UPLOADING OVERLAY */}
       {uploading && (
-        <div className="absolute bottom-32 right-6 bg-blue-600 text-white px-6 py-4 rounded-2xl shadow-2xl">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-3 border-white border-t-transparent"></div>
-            <span className="text-lg font-medium">Uploading...</span>
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-[32px] shadow-2xl flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-blue-600"></div>
+            <span className="text-xl font-black text-gray-800">Sending File...</span>
           </div>
         </div>
       )}
