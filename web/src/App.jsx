@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Version 2 (Indigo/Slate Theme + Photo Previews)
+// Modernized UI for webchat - WhatsApp Style (Family Circle)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Link as LinkIcon, Eye
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, Plus, MoreVertical
 } from 'lucide-react';
 
 // Helper component to make links clickable
@@ -25,7 +25,7 @@ const LinkifyText = ({ text, isSender }) => {
               href={part} 
               target="_blank" 
               rel="noopener noreferrer" 
-              className={`${isSender ? 'text-indigo-100 underline hover:text-white' : 'text-indigo-600 underline hover:text-indigo-800'} transition-colors duration-200 break-all`}
+              className={`${isSender ? 'text-emerald-100 underline hover:text-white' : 'text-emerald-600 underline hover:text-emerald-800'} transition-colors duration-200 break-all`}
             >
               {part}
             </a>
@@ -431,30 +431,30 @@ const EncryptedChat = () => {
   // --- RENDER LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-        <div className="bg-[#1e293b] p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-700">
+      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
+        <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
           <div className="text-center mb-10">
-            <div className="bg-indigo-500/10 w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20">
-              <Phone size={48} className="text-indigo-400" />
+            <div className="bg-[#25d366] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
+              <Phone size={40} className="text-white" />
             </div>
-            <h1 className="text-4xl font-black text-white mb-3 tracking-tight">Family Hub</h1>
-            <p className="text-slate-400 font-medium text-lg">Secure connection for the family</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Family Circle</h1>
+            <p className="text-gray-500 font-medium">Secure and private family chat</p>
           </div>
           
-          <div className="space-y-8">
+          <div className="space-y-6">
             <input 
               type="password" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
               onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
-              placeholder="Enter Access Code" 
-              className="w-full px-8 py-5 bg-slate-900/50 border-2 border-slate-700 rounded-3xl text-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-center tracking-[0.5em] text-white placeholder:tracking-normal placeholder:text-slate-600"
+              placeholder="Enter Password" 
+              className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-xl text-xl focus:outline-none focus:border-[#25d366] transition-all text-center"
             />
             <button 
               onClick={handleUnifiedLogin} 
-              className="w-full bg-indigo-600 text-white py-5 rounded-3xl text-xl font-black hover:bg-indigo-500 active:scale-[0.98] transition-all shadow-xl shadow-indigo-600/20"
+              className="w-full bg-[#25d366] text-white py-4 rounded-xl text-xl font-bold hover:bg-[#128c7e] active:scale-[0.98] transition-all shadow-md"
             >
-              Enter Chat
+              Sign In
             </button>
           </div>
         </div>
@@ -464,72 +464,56 @@ const EncryptedChat = () => {
 
   // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-screen bg-[#0f172a] font-sans text-slate-200">
-      {/* HEADER */}
-      <div className="bg-[#1e293b]/80 backdrop-blur-xl border-b border-slate-800 px-6 py-5 sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <div className="bg-indigo-600 p-3.5 rounded-2xl text-white shadow-lg shadow-indigo-600/20">
-                <Phone size={26} />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 bg-emerald-500 border-3 border-[#1e293b] rounded-full"></div>
+    <div className="flex flex-col h-screen bg-[#efeae2] font-sans text-gray-800">
+      {/* HEADER - WhatsApp Style */}
+      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 sticky top-0 z-30 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="bg-gray-300 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 overflow-hidden">
+              <Phone size={24} />
             </div>
-            <div>
-              <h2 className="font-black text-2xl text-white leading-tight tracking-tight">Family Chat</h2>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">
-                  {userType === 'admin' ? 'Admin Access' : 'Family Member'}
-                </p>
-              </div>
-            </div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] border-2 border-[#f0f2f5] rounded-full"></div>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {userType === 'admin' && (
-              <button 
-                onClick={() => setShowSettings(!showSettings)} 
-                className={`p-3.5 rounded-2xl transition-all ${
-                  showSettings ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:bg-slate-800'
-                }`}
-              >
-                <Settings size={26} />
-              </button>
-            )}
-            <button 
-              onClick={handleLogout} 
-              className="flex items-center gap-2 bg-slate-800 text-slate-300 px-6 py-3.5 rounded-2xl font-black hover:bg-rose-500/10 hover:text-rose-400 transition-all active:scale-95 border border-slate-700"
-            >
-              <LogOut size={22} />
-              <span className="hidden sm:inline">Exit</span>
+          <div>
+            <h2 className="font-bold text-base text-gray-900 leading-tight">Family Circle</h2>
+            <p className="text-xs text-gray-500">
+              {userType === 'admin' ? 'Admin' : 'Family Member'}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-4 text-gray-600">
+          {userType === 'admin' && (
+            <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-gray-200 rounded-full transition-all">
+              <Settings size={20} />
             </button>
-          </div>
+          )}
+          <button onClick={handleLogout} className="p-2 hover:bg-gray-200 rounded-full transition-all" title="Logout">
+            <LogOut size={20} />
+          </button>
+          <button className="p-2 hover:bg-gray-200 rounded-full transition-all">
+            <MoreVertical size={20} />
+          </button>
         </div>
       </div>
 
-      {/* SETTINGS */}
+      {/* SETTINGS OVERLAY */}
       {showSettings && userType === 'admin' && (
-        <div className="bg-[#1e293b] border-b border-slate-800 p-8 absolute top-[89px] right-0 left-0 z-20 shadow-2xl animate-in slide-in-from-top duration-300">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h3 className="font-black text-2xl text-white tracking-tight">Message Expiry</h3>
-                <p className="text-slate-400 font-medium">Choose when messages should be automatically deleted</p>
-              </div>
-              <button onClick={() => setShowSettings(false)} className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-all">
-                <X size={28} />
-              </button>
+        <div className="bg-white border-b border-gray-300 p-6 absolute top-[65px] right-0 left-0 z-20 shadow-lg animate-in slide-in-from-top duration-200">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg">Auto-Delete Messages</h3>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+            <div className="flex flex-wrap gap-3">
               {[1, 3, 7, 30].map(day => (
                 <button 
                   key={day} 
                   onClick={() => updateAutoDeleteSettings(day)} 
-                  className={`px-8 py-5 rounded-[2rem] text-xl font-black transition-all border-2 ${
+                  className={`px-6 py-3 rounded-full text-sm font-bold transition-all border ${
                     autoDeleteDays === day 
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-600/20' 
-                      : 'bg-slate-900/50 text-slate-400 border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5'
+                      ? 'bg-[#25d366] text-white border-[#25d366]' 
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   {day} Day{day > 1 ? 's' : ''}
@@ -541,71 +525,56 @@ const EncryptedChat = () => {
       )}
 
       {/* MESSAGES AREA */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-[#0f172a]">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
         {loadingMessages ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-6">
-            <div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-800 border-t-indigo-500"></div>
-            <p className="text-slate-500 font-black text-xl tracking-tight">Syncing family messages...</p>
+          <div className="flex justify-center items-center h-full">
+            <div className="bg-white/80 px-4 py-2 rounded-full text-sm font-medium shadow-sm">Loading...</div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center bg-[#1e293b] p-16 rounded-[3rem] shadow-xl border border-slate-800 max-w-md">
-              <div className="bg-indigo-500/10 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-indigo-500/20">
-                <Send size={40} className="text-indigo-400" />
-              </div>
-              <h3 className="text-white font-black text-3xl mb-3 tracking-tight">Empty Chat</h3>
-              <p className="text-slate-400 font-medium text-lg">Start the conversation with your family!</p>
+          <div className="flex justify-center items-center h-full">
+            <div className="bg-[#dcf8c6] px-6 py-3 rounded-xl text-sm font-medium shadow-sm border border-gray-200">
+              No messages yet. Say hi!
             </div>
           </div>
         ) : (
           messages.map(msg => (
             <div key={msg.id} className={`flex w-full ${msg.sender === userType ? 'justify-end' : 'justify-start'}`}>
-              <div className={`relative max-w-[85%] sm:max-w-[70%] px-7 py-5 rounded-[2.5rem] shadow-lg group transition-all hover:shadow-indigo-500/5 ${
+              <div className={`relative max-w-[85%] sm:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm group ${
                 msg.sender === userType 
-                  ? 'bg-indigo-600 text-white rounded-tr-none' 
-                  : 'bg-[#1e293b] text-slate-200 border border-slate-800 rounded-tl-none'
+                  ? 'bg-[#dcf8c6] rounded-tr-none' 
+                  : 'bg-white rounded-tl-none'
               }`}>
                 
                 {/* TEXT MESSAGE */}
                 {msg.type === 'text' && (
-                  <div className="text-[18px] leading-relaxed font-medium">
+                  <div className="text-[14.5px] leading-normal pr-10">
                     <LinkifyText text={msg.text} isSender={msg.sender === userType} />
                   </div>
                 )}
                 
                 {/* FILE MESSAGE */}
                 {msg.type === 'file' && (
-                  <div className="space-y-3">
+                  <div className="space-y-1 mb-1">
                     {msg.fileType?.startsWith('image/') ? (
-                      <div className="relative group/img overflow-hidden rounded-3xl border-2 border-white/10 shadow-2xl">
+                      <div className="relative rounded-md overflow-hidden border border-gray-100">
                         <img 
                           src={msg.fileData} 
                           alt="Shared" 
-                          className="max-h-96 object-cover w-full cursor-pointer transition-transform duration-500 group-hover/img:scale-105" 
+                          className="max-h-80 object-cover w-full cursor-pointer" 
                           onClick={() => setPreviewImage(msg.fileData)} 
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                          <button onClick={() => setPreviewImage(msg.fileData)} className="bg-white/20 backdrop-blur-md p-4 rounded-full text-white hover:bg-white/30 transition-all">
-                            <Eye size={28} />
-                          </button>
-                          <a href={msg.fileData} target="_blank" rel="noreferrer" className="bg-white/20 backdrop-blur-md p-4 rounded-full text-white hover:bg-white/30 transition-all">
-                            <Download size={28} />
-                          </a>
-                        </div>
                       </div>
                     ) : (
-                      <div className={`flex items-center space-x-5 p-5 rounded-3xl ${msg.sender === userType ? 'bg-white/10' : 'bg-slate-900/50'}`}>
-                        <div className="bg-indigo-500 p-4 rounded-2xl text-white shadow-lg">
-                          <Paperclip size={24} />
+                      <div className={`flex items-center space-x-3 p-3 rounded-md ${msg.sender === userType ? 'bg-black/5' : 'bg-gray-50'}`}>
+                        <div className="bg-[#25d366] p-2 rounded-md text-white">
+                          <Paperclip size={18} />
                         </div>
                         <div className="overflow-hidden flex-1">
-                          <p className="text-lg font-black truncate">{msg.fileName}</p>
-                          <p className={`text-sm font-bold ${msg.sender === userType ? 'text-indigo-100' : 'text-slate-500'}`}>
-                            {Math.round(msg.fileSize/1024)} KB
-                          </p>
+                          <p className="text-sm font-bold truncate">{msg.fileName}</p>
+                          <p className="text-[10px] text-gray-500 uppercase">{Math.round(msg.fileSize/1024)} KB</p>
                         </div>
-                        <a href={msg.fileData} target="_blank" rel="noreferrer" className={`p-4 rounded-2xl transition-all ${msg.sender === userType ? 'hover:bg-white/20 text-white' : 'hover:bg-indigo-500/10 text-indigo-400'}`}>
-                          <Download size={28} />
+                        <a href={msg.fileData} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-gray-600">
+                          <Download size={20} />
                         </a>
                       </div>
                     )}
@@ -614,28 +583,31 @@ const EncryptedChat = () => {
 
                 {/* VOICE MESSAGE */}
                 {msg.type === 'voice' && (
-                  <div className="space-y-4 min-w-[260px]">
-                    <div className="flex items-center gap-4 text-sm font-black uppercase tracking-widest">
-                      <div className={`p-2.5 rounded-full ${msg.sender === userType ? 'bg-white/20' : 'bg-indigo-500/10 text-indigo-400'}`}>
+                  <div className="flex items-center gap-3 py-1 min-w-[200px]">
+                    <div className="relative">
+                      <div className="bg-gray-200 p-2 rounded-full text-gray-600">
                         <Mic size={20} />
                       </div>
-                      <span>Voice Note • {formatDuration(msg.duration)}</span>
+                      <div className="absolute -bottom-1 -right-1 bg-[#25d366] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                      </div>
                     </div>
-                    <audio controls src={msg.audioData} className={`w-full h-11 rounded-xl ${msg.sender === userType ? 'brightness-150' : 'invert opacity-80'}`} preload="metadata" />
+                    <audio controls src={msg.audioData} className="h-8 w-full opacity-80" preload="metadata" />
+                    <span className="text-[10px] text-gray-500 whitespace-nowrap">{formatDuration(msg.duration)}</span>
                   </div>
                 )}
                 
-                {/* FOOTER */}
-                <div className={`text-[12px] mt-3 flex justify-end items-center gap-3 font-black uppercase tracking-widest ${msg.sender === userType ? 'text-indigo-100/70' : 'text-slate-500'}`}>
-                  <span>{formatTime(msg.timestamp)}</span>
+                {/* FOOTER - Aligned Right like WhatsApp */}
+                <div className="flex items-center justify-end gap-1 mt-0.5">
+                  <span className="text-[10px] text-gray-500">{formatTime(msg.timestamp)}</span>
                   {msg.sender === userType && (
                     <span>
-                      {msg.status === 'read' ? <CheckCheck size={16} className="text-emerald-400" /> : <Check size={16} className="text-white/40" />}
+                      {msg.status === 'read' ? <CheckCheck size={14} className="text-[#34b7f1]" /> : <Check size={14} className="text-gray-400" />}
                     </span>
                   )}
                   {userType === 'admin' && (
-                    <button onClick={() => deleteMessage(msg.id)} className="ml-2 p-2 hover:bg-rose-500/20 rounded-xl opacity-0 group-hover:opacity-100 transition-all">
-                      <Trash2 size={16} className={msg.sender === userType ? 'text-white' : 'text-rose-500'} />
+                    <button onClick={() => deleteMessage(msg.id)} className="ml-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 size={12} className="text-red-400" />
                     </button>
                   )}
                 </div>
@@ -648,114 +620,101 @@ const EncryptedChat = () => {
 
       {/* PHOTO PREVIEW BEFORE SENDING */}
       {selectedFile && (
-        <div className="bg-[#1e293b] border-t border-slate-800 p-6 animate-in slide-in-from-bottom duration-300">
-          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center gap-6">
+        <div className="bg-white border-t border-gray-200 p-4 animate-in slide-in-from-bottom duration-200">
+          <div className="max-w-4xl mx-auto flex items-center gap-4">
             {filePreviewUrl ? (
-              <img src={filePreviewUrl} alt="Preview" className="w-32 h-32 object-cover rounded-3xl border-4 border-indigo-500/30 shadow-2xl" />
+              <img src={filePreviewUrl} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
             ) : (
-              <div className="w-32 h-32 bg-slate-900 rounded-3xl flex items-center justify-center border-4 border-slate-800">
-                <Paperclip size={40} className="text-slate-600" />
+              <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                <Paperclip size={24} className="text-gray-400" />
               </div>
             )}
-            <div className="flex-1 text-center sm:text-left">
-              <h4 className="text-xl font-black text-white mb-1 truncate max-w-xs mx-auto sm:mx-0">{selectedFile.name}</h4>
-              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">{Math.round(selectedFile.size/1024)} KB • Ready to send</p>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-bold truncate">{selectedFile.name}</p>
+              <p className="text-xs text-gray-500">{Math.round(selectedFile.size/1024)} KB</p>
             </div>
-            <div className="flex gap-4 w-full sm:w-auto">
-              <button onClick={cancelFileUpload} className="flex-1 sm:flex-none px-8 py-4 bg-slate-800 text-slate-300 rounded-2xl font-black hover:bg-slate-700 transition-all">Cancel</button>
-              <button onClick={confirmAndUploadFile} className="flex-1 sm:flex-none px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20">Send File</button>
+            <div className="flex gap-2">
+              <button onClick={cancelFileUpload} className="p-2 text-gray-400 hover:text-gray-600"><X size={24} /></button>
+              <button onClick={confirmAndUploadFile} className="bg-[#25d366] text-white p-3 rounded-full shadow-md hover:bg-[#128c7e] transition-all">
+                <Send size={24} />
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* INPUT AREA */}
-      <div className="bg-[#1e293b] border-t border-slate-800 px-6 py-6 pb-10 sm:pb-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex gap-4 mb-5">
-            <button 
-              onClick={isCallActive ? stopCall : startCall} 
-              className={`flex-1 flex items-center justify-center gap-4 px-8 py-5 rounded-[2rem] font-black text-xl transition-all shadow-2xl active:scale-[0.98] ${
-                isCallActive 
-                  ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/30' 
-                  : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-600/30 hover:shadow-indigo-600/40'
-              }`}
-            >
-              {isCallActive ? (
-                <>
-                  <div className="w-4 h-4 bg-white rounded-full animate-ping"></div>
-                  <PhoneOff size={28} />
-                  <span>Stop ({formatDuration(recordingTime)})</span>
-                </>
-              ) : (
-                <>
-                  <Mic size={28} />
-                  <span>Record Voice Message</span>
-                </>
-              )}
-            </button>
-            
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
-            <button 
-              onClick={() => fileInputRef.current?.click()} 
-              disabled={uploading}
-              className="bg-slate-800 text-slate-300 p-5 rounded-[2rem] font-black hover:bg-slate-700 transition-all active:scale-95 border border-slate-700 shadow-lg flex items-center gap-3"
-            >
-              <ImageIcon size={30} />
-              <span className="hidden md:inline text-lg">Photo</span>
-            </button>
-          </div>
+      {/* INPUT AREA - WhatsApp Style */}
+      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          <button className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-all">
+            <Plus size={24} />
+          </button>
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={uploading}
+            className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-all"
+            title="Attach Photo"
+          >
+            <ImageIcon size={24} />
+          </button>
+        </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex-1 bg-slate-900/50 rounded-[2rem] flex items-center px-8 py-5 border-2 border-slate-800 focus-within:border-indigo-500 focus-within:bg-slate-900 transition-all">
-              <input 
-                type="text" 
-                value={newMessage} 
-                onChange={(e) => setNewMessage(e.target.value)} 
-                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
-                placeholder={uploading ? "Uploading..." : "Type a message..."} 
-                disabled={uploading} 
-                className="flex-1 focus:outline-none text-white bg-transparent text-xl font-medium placeholder:text-slate-600" 
-                maxLength={1000}
-              />
-            </div>
+        <div className="flex-1 bg-white rounded-full flex items-center px-4 py-2 shadow-sm">
+          <input 
+            type="text" 
+            value={newMessage} 
+            onChange={(e) => setNewMessage(e.target.value)} 
+            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} 
+            placeholder="Type a message" 
+            disabled={uploading} 
+            className="flex-1 focus:outline-none text-gray-800 bg-transparent text-[15px]" 
+          />
+        </div>
+
+        <div className="flex items-center">
+          {newMessage.trim() ? (
             <button 
               onClick={handleSendMessage} 
-              disabled={uploading || !newMessage.trim()} 
-              className={`p-6 rounded-[2rem] transition-all shadow-2xl active:scale-90 ${
-                newMessage.trim() && !uploading
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/30' 
-                  : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+              disabled={uploading} 
+              className="p-3 bg-[#25d366] text-white rounded-full shadow-md hover:bg-[#128c7e] transition-all active:scale-90"
+            >
+              <Send size={20} />
+            </button>
+          ) : (
+            <button 
+              onClick={isCallActive ? stopCall : startCall} 
+              className={`p-3 rounded-full shadow-md transition-all active:scale-90 ${
+                isCallActive ? 'bg-red-500 text-white animate-pulse' : 'bg-[#25d366] text-white hover:bg-[#128c7e]'
               }`}
             >
-              <Send size={30} />
+              {isCallActive ? <PhoneOff size={20} /> : <Mic size={20} />}
             </button>
-          </div>
+          )}
         </div>
       </div>
 
       {/* FULL IMAGE PREVIEW MODAL */}
       {previewImage && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-          <button onClick={() => setPreviewImage(null)} className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
-            <X size={32} />
-          </button>
-          <img src={previewImage} alt="Full Preview" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
-          <div className="mt-8 flex gap-6">
-            <a href={previewImage} download target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-indigo-600 text-white px-10 py-5 rounded-3xl font-black text-xl hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-600/20">
-              <Download size={28} />
-              Save Photo
+        <div className="fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute top-4 right-4 flex gap-4">
+            <a href={previewImage} download target="_blank" rel="noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
+              <Download size={24} />
             </a>
+            <button onClick={() => setPreviewImage(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
+              <X size={24} />
+            </button>
           </div>
+          <img src={previewImage} alt="Full Preview" className="max-w-full max-h-[85vh] object-contain" />
         </div>
       )}
 
       {/* UPLOADING OVERLAY */}
       {uploading && (
-        <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-md z-[110] flex items-center justify-center">
-          <div className="bg-[#1e293b] p-12 rounded-[3rem] shadow-2xl border border-slate-700 flex flex-col items-center gap-6">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-indigo-500/20 border-t-indigo-500"></div>
-            <span className="text-2xl font-black text-white tracking-tight">Sending to Family...</span>
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[110] flex items-center justify-center">
+          <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-[#25d366]"></div>
+            <span className="text-lg font-bold text-gray-800">Sending...</span>
           </div>
         </div>
       )}
