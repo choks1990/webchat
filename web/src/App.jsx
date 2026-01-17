@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Final Fix (Auto-delete & Call Layout)
+// Modernized UI for webchat - Fixed Version (Circle Connect)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -138,7 +138,6 @@ const EncryptedChat = () => {
 
       unsubscribeRef.current = unsubscribe;
 
-      // Run cleanup immediately and then every hour
       checkAndCleanOldMessages();
       const cleanupInterval = setInterval(checkAndCleanOldMessages, 3600000);
 
@@ -168,7 +167,7 @@ const EncryptedChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // --- 2. LOGIC: AUTO-DELETE (FIXED) ---
+  // --- 2. LOGIC: AUTO-DELETE ---
   const updateAutoDeleteSettings = async (days) => {
     setAutoDeleteDays(days);
     try {
@@ -186,8 +185,6 @@ const EncryptedChat = () => {
       const days = daysOverride || autoDeleteDays;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      
-      // Firestore query using Timestamp for better reliability
       const cutoffTimestamp = Timestamp.fromDate(cutoffDate);
 
       const q = query(
@@ -203,7 +200,6 @@ const EncryptedChat = () => {
 
       if (deletePromises.length > 0) {
         await Promise.all(deletePromises);
-        console.log(`Auto-deleted ${deletePromises.length} old messages.`);
       }
     } catch (error) {
       console.error("Error cleaning old messages:", error);
@@ -698,10 +694,9 @@ const EncryptedChat = () => {
         </div>
       </div>
 
-      {/* FULL-SCREEN CALL INTERFACE (FIXED END BUTTON) */}
+      {/* FULL-SCREEN CALL INTERFACE */}
       {isCallActive && (
         <div className="fixed inset-0 bg-[#075e54] z-[200] flex flex-col items-center justify-between animate-in fade-in duration-300">
-          {/* Top Content */}
           <div className="flex flex-col items-center mt-24">
             <div className="bg-white/10 p-10 rounded-full mb-6">
               <User size={80} className="text-white/80" />
@@ -713,7 +708,6 @@ const EncryptedChat = () => {
             </div>
           </div>
           
-          {/* Bottom Content (End Button at very bottom) */}
           <div className="flex flex-col items-center w-full pb-16 px-10">
             <div className="w-full max-w-xs bg-white/10 h-1.5 rounded-full overflow-hidden mb-12">
               <div className="bg-[#25d366] h-full animate-pulse w-full"></div>
@@ -734,12 +728,12 @@ const EncryptedChat = () => {
       {previewImage && (
         <div className="fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="absolute top-4 right-4 flex gap-4">
-            <a href={previewImage} download target="_blank" rel="noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
+            <a href={previewImage} download target="_blank" rel="noopener noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
               <Download size={24} />
             </a>
             <button onClick={() => setPreviewImage(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
               <X size={24} />
-            </a>
+            </button>
           </div>
           <img src={previewImage} alt="Full Preview" className="max-w-full max-h-[85vh] object-contain" />
         </div>
