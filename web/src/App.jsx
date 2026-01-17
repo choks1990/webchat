@@ -1,9 +1,9 @@
-// Modernized UI for webchat - Mobile Optimized & Generic Name (Circle Connect)
+// Modernized UI for webchat - Final Fix (Auto-delete & Call Layout)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
   collection, addDoc, deleteDoc, doc, setDoc, getDoc, updateDoc,
-  query, orderBy, onSnapshot, limit, serverTimestamp, getDocs, where 
+  query, orderBy, onSnapshot, limit, serverTimestamp, getDocs, where, Timestamp
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
@@ -96,7 +96,7 @@ const EncryptedChat = () => {
       const q = query(
         collection(db, "messages"), 
         orderBy("timestamp", "desc"),
-        limit(25)
+        limit(50)
       );
       
       unsubscribe = onSnapshot(q, 
@@ -138,9 +138,13 @@ const EncryptedChat = () => {
 
       unsubscribeRef.current = unsubscribe;
 
-      setTimeout(() => {
-        checkAndCleanOldMessages();
-      }, 2000);
+      // Run cleanup immediately and then every hour
+      checkAndCleanOldMessages();
+      const cleanupInterval = setInterval(checkAndCleanOldMessages, 3600000);
+
+      return () => {
+        clearInterval(cleanupInterval);
+      };
 
     } else if (!isLoggedIn) {
       setMessages([]);
@@ -164,7 +168,7 @@ const EncryptedChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // --- 2. LOGIC: AUTO-DELETE ---
+  // --- 2. LOGIC: AUTO-DELETE (FIXED) ---
   const updateAutoDeleteSettings = async (days) => {
     setAutoDeleteDays(days);
     try {
@@ -182,12 +186,13 @@ const EncryptedChat = () => {
       const days = daysOverride || autoDeleteDays;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      const cutoffTimestamp = cutoffDate.getTime();
+      
+      // Firestore query using Timestamp for better reliability
+      const cutoffTimestamp = Timestamp.fromDate(cutoffDate);
 
       const q = query(
         collection(db, "messages"),
         where("timestamp", "<", cutoffTimestamp),
-        orderBy("timestamp", "asc"),
         limit(100)
       );
       
@@ -198,6 +203,7 @@ const EncryptedChat = () => {
 
       if (deletePromises.length > 0) {
         await Promise.all(deletePromises);
+        console.log(`Auto-deleted ${deletePromises.length} old messages.`);
       }
     } catch (error) {
       console.error("Error cleaning old messages:", error);
@@ -692,10 +698,11 @@ const EncryptedChat = () => {
         </div>
       </div>
 
-      {/* FULL-SCREEN CALL INTERFACE */}
+      {/* FULL-SCREEN CALL INTERFACE (FIXED END BUTTON) */}
       {isCallActive && (
-        <div className="fixed inset-0 bg-[#075e54] z-[200] flex flex-col items-center justify-between p-10 animate-in fade-in duration-300">
-          <div className="flex flex-col items-center mt-20">
+        <div className="fixed inset-0 bg-[#075e54] z-[200] flex flex-col items-center justify-between animate-in fade-in duration-300">
+          {/* Top Content */}
+          <div className="flex flex-col items-center mt-24">
             <div className="bg-white/10 p-10 rounded-full mb-6">
               <User size={80} className="text-white/80" />
             </div>
@@ -706,7 +713,8 @@ const EncryptedChat = () => {
             </div>
           </div>
           
-          <div className="flex flex-col items-center w-full mb-10">
+          {/* Bottom Content (End Button at very bottom) */}
+          <div className="flex flex-col items-center w-full pb-16 px-10">
             <div className="w-full max-w-xs bg-white/10 h-1.5 rounded-full overflow-hidden mb-12">
               <div className="bg-[#25d366] h-full animate-pulse w-full"></div>
             </div>
@@ -731,7 +739,7 @@ const EncryptedChat = () => {
             </a>
             <button onClick={() => setPreviewImage(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all">
               <X size={24} />
-            </button>
+            </a>
           </div>
           <img src={previewImage} alt="Full Preview" className="max-w-full max-h-[85vh] object-contain" />
         </div>
