@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Final Refined Version (Family Circle)
+// Modernized UI for webchat - Mobile Optimized & Generic Name (Circle Connect)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, MoreVertical, Video
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, MoreVertical, User
 } from 'lucide-react';
 
 // Helper component to make links clickable
@@ -437,8 +437,8 @@ const EncryptedChat = () => {
             <div className="bg-[#25d366] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
               <Phone size={40} className="text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Family Circle</h1>
-            <p className="text-gray-500 font-medium">Secure and private family chat</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Circle Connect</h1>
+            <p className="text-gray-500 font-medium">Secure and private messaging</p>
           </div>
           
           <div className="space-y-6">
@@ -464,34 +464,31 @@ const EncryptedChat = () => {
 
   // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-screen bg-[#efeae2] font-sans text-gray-800">
-      {/* HEADER - WhatsApp Style */}
-      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 sticky top-0 z-30 flex justify-between items-center">
+    <div className="flex flex-col h-[100dvh] bg-[#efeae2] font-sans text-gray-800 overflow-hidden">
+      {/* HEADER */}
+      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 sticky top-0 z-30 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="bg-gray-300 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 overflow-hidden">
-              <Phone size={24} />
+              <User size={24} />
             </div>
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] border-2 border-[#f0f2f5] rounded-full"></div>
           </div>
           <div>
-            <h2 className="font-bold text-base text-gray-900 leading-tight">Family Circle</h2>
+            <h2 className="font-bold text-base text-gray-900 leading-tight">Circle Connect</h2>
             <p className="text-xs text-gray-500">
-              {userType === 'admin' ? 'Admin' : 'Family Member'}
+              {userType === 'admin' ? 'Admin' : 'Member'}
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-3 text-gray-600">
-          {/* Call/Record Button at Top Right */}
           <button 
-            onClick={isCallActive ? stopCall : startCall} 
-            className={`p-2.5 rounded-full transition-all shadow-sm ${
-              isCallActive ? 'bg-red-500 text-white animate-pulse' : 'hover:bg-gray-200 text-gray-600'
-            }`}
-            title={isCallActive ? "Stop Recording" : "Record Voice Message"}
+            onClick={startCall} 
+            className="p-2.5 hover:bg-gray-200 rounded-full transition-all text-gray-600"
+            title="Start Voice Note"
           >
-            {isCallActive ? <PhoneOff size={20} /> : <Phone size={20} />}
+            <Phone size={20} />
           </button>
           
           {userType === 'admin' && (
@@ -608,7 +605,7 @@ const EncryptedChat = () => {
                   </div>
                 )}
                 
-                {/* FOOTER - Aligned Right like WhatsApp */}
+                {/* FOOTER */}
                 <div className="flex items-center justify-end gap-1 mt-0.5">
                   <span className="text-[10px] text-gray-500">{formatTime(msg.timestamp)}</span>
                   {msg.sender === userType && (
@@ -631,7 +628,7 @@ const EncryptedChat = () => {
 
       {/* PHOTO PREVIEW BEFORE SENDING */}
       {selectedFile && (
-        <div className="bg-white border-t border-gray-200 p-4 animate-in slide-in-from-bottom duration-200">
+        <div className="bg-white border-t border-gray-200 p-4 animate-in slide-in-from-bottom duration-200 flex-shrink-0">
           <div className="max-w-4xl mx-auto flex items-center gap-4">
             {filePreviewUrl ? (
               <img src={filePreviewUrl} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
@@ -654,8 +651,8 @@ const EncryptedChat = () => {
         </div>
       )}
 
-      {/* INPUT AREA - WhatsApp Style Refined */}
-      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3">
+      {/* INPUT AREA */}
+      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
         <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
           <button 
@@ -694,6 +691,36 @@ const EncryptedChat = () => {
           </button>
         </div>
       </div>
+
+      {/* FULL-SCREEN CALL INTERFACE */}
+      {isCallActive && (
+        <div className="fixed inset-0 bg-[#075e54] z-[200] flex flex-col items-center justify-between p-10 animate-in fade-in duration-300">
+          <div className="flex flex-col items-center mt-20">
+            <div className="bg-white/10 p-10 rounded-full mb-6">
+              <User size={80} className="text-white/80" />
+            </div>
+            <h2 className="text-white text-3xl font-bold mb-2">Circle Connect</h2>
+            <p className="text-white/60 text-xl font-medium">Recording Voice Note...</p>
+            <div className="mt-6 text-white text-4xl font-mono font-bold">
+              {formatDuration(recordingTime)}
+            </div>
+          </div>
+          
+          <div className="flex flex-col items-center w-full mb-10">
+            <div className="w-full max-w-xs bg-white/10 h-1.5 rounded-full overflow-hidden mb-12">
+              <div className="bg-[#25d366] h-full animate-pulse w-full"></div>
+            </div>
+            
+            <button 
+              onClick={stopCall} 
+              className="bg-red-500 text-white p-8 rounded-full shadow-2xl hover:bg-red-600 transition-all active:scale-90 flex items-center justify-center"
+            >
+              <PhoneOff size={40} />
+            </button>
+            <p className="text-white/80 mt-6 font-bold text-lg">End & Send</p>
+          </div>
+        </div>
+      )}
 
       {/* FULL IMAGE PREVIEW MODAL */}
       {previewImage && (
