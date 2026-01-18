@@ -481,8 +481,8 @@ const EncryptedChat = () => {
   // --- RENDER CHAT ---
   return (
     <div 
-      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 overflow-hidden fixed inset-0"
-      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full"
+      style={{ height: '100vh', height: 'calc(var(--vh, 1vh) * 100)' }}
     >
       {/* HEADER */}
       <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 z-30 flex justify-between items-center flex-shrink-0">
@@ -549,7 +549,7 @@ const EncryptedChat = () => {
       )}
 
       {/* MESSAGES AREA */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat" style={{ minHeight: 0 }}>
         {loadingMessages ? (
           <div className="flex justify-center items-center h-full">
             <div className="bg-white/80 px-4 py-2 rounded-full text-sm font-medium shadow-sm">Loading...</div>
@@ -668,7 +668,7 @@ const EncryptedChat = () => {
       )}
 
       {/* INPUT AREA */}
-      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0 pb-[env(safe-area-inset-bottom,10px)]">
+      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
         <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
           <button 
