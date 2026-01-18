@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Final Refined Version (Circle Connect)
+// Modernized UI for webchat - Mobile Input Fix (Circle Connect)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -156,6 +156,18 @@ const EncryptedChat = () => {
       }
     };
   }, [isLoggedIn, userType]);
+
+  // Handle Viewport Height for Mobile Browsers
+  useEffect(() => {
+    const setVh = () => {
+      let vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    setVh();
+    window.addEventListener('resize', setVh);
+    return () => window.removeEventListener('resize', setVh);
+  }, []);
 
   useEffect(() => {
     if (!loadingMessages && messages.length > 0) {
@@ -468,7 +480,10 @@ const EncryptedChat = () => {
 
   // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-screen h-[100dvh] bg-[#efeae2] font-sans text-gray-800 overflow-hidden fixed inset-0">
+    <div 
+      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 overflow-hidden fixed inset-0"
+      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       {/* HEADER */}
       <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 z-30 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -653,7 +668,7 @@ const EncryptedChat = () => {
       )}
 
       {/* INPUT AREA */}
-      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0 pb-[env(safe-area-inset-bottom,10px)]">
         <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
           <button 
