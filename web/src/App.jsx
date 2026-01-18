@@ -1,4 +1,4 @@
-// Modernized UI for webchat - Fixed Version (Circle Connect)
+// Modernized UI for webchat - Final Refined Version (Circle Connect)
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase/init';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Send, Phone, LogOut, Paperclip, Mic, Download, PhoneOff, 
-  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, MoreVertical, User
+  Trash2, Settings, Image as ImageIcon, Check, CheckCheck, X, Eye, User
 } from 'lucide-react';
 
 // Helper component to make links clickable
@@ -418,10 +418,12 @@ const EncryptedChat = () => {
   };
 
   // --- HELPERS ---
-  const formatTime = (timestamp) => {
+  const formatDateTime = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return `${dateStr}, ${timeStr}`;
   };
 
   const formatDuration = (seconds) => {
@@ -466,9 +468,9 @@ const EncryptedChat = () => {
 
   // --- RENDER CHAT ---
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#efeae2] font-sans text-gray-800 overflow-hidden">
+    <div className="flex flex-col h-screen h-[100dvh] bg-[#efeae2] font-sans text-gray-800 overflow-hidden fixed inset-0">
       {/* HEADER */}
-      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 sticky top-0 z-30 flex justify-between items-center flex-shrink-0">
+      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 z-30 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="bg-gray-300 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 overflow-hidden">
@@ -500,9 +502,6 @@ const EncryptedChat = () => {
           )}
           <button onClick={handleLogout} className="p-2 hover:bg-gray-200 rounded-full transition-all" title="Logout">
             <LogOut size={20} />
-          </button>
-          <button className="p-2 hover:bg-gray-200 rounded-full transition-all">
-            <MoreVertical size={20} />
           </button>
         </div>
       </div>
@@ -609,7 +608,7 @@ const EncryptedChat = () => {
                 
                 {/* FOOTER */}
                 <div className="flex items-center justify-end gap-1 mt-0.5">
-                  <span className="text-[10px] text-gray-500">{formatTime(msg.timestamp)}</span>
+                  <span className="text-[10px] text-gray-500">{formatDateTime(msg.timestamp)}</span>
                   {msg.sender === userType && (
                     <span>
                       {msg.status === 'read' ? <CheckCheck size={14} className="text-[#34b7f1]" /> : <Check size={14} className="text-gray-400" />}
