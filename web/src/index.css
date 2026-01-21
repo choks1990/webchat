@@ -1,10 +1,8 @@
-/*
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-*/
 
-/* iOS Mobile Fixes - Critical */
+/* iOS Mobile Fixes - Critical for keyboard handling */
 html, body {
   margin: 0;
   padding: 0;
@@ -29,14 +27,14 @@ html, body {
   text-size-adjust: 100%;
 }
 
-/* Prevent iOS input zoom (16px minimum) */
+/* Prevent iOS input zoom (16px minimum required) */
 input, 
 textarea, 
 select {
   font-size: 16px !important;
 }
 
-/* Prevent iOS tap highlight */
+/* Prevent iOS tap highlight and callout */
 * {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -58,5 +56,12 @@ body {
   body {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Fix for mobile browsers address bar */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
   }
 }
