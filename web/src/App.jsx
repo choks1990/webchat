@@ -62,6 +62,7 @@ const EncryptedChat = () => {
 
   // Viewport State for Keyboard handling
   const [visualViewportHeight, setVisualViewportHeight] = useState(window.innerHeight);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   // --- REFS ---
   const messagesEndRef = useRef(null);
@@ -74,27 +75,34 @@ const EncryptedChat = () => {
   const ADMIN_PASSWORD = '1990';
   const USER_PASSWORD = '1964';
 
-  // --- 1. VIEWPORT & KEYBOARD HANDLING (CRITICAL FIX) ---
+  // --- 1. SAFARI/IOS SCROLL LOCK & VIEWPORT ---
   useEffect(() => {
+    // This locks the body to prevent Safari from scrolling the "whole page" 
+    // when the keyboard opens. We only want the internal div to scroll.
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+    document.body.style.overflow = 'hidden';
+
     const handleResize = () => {
-      // 1. Get the actual visible height above the keyboard
       let currentHeight = window.innerHeight;
       if (window.visualViewport) {
         currentHeight = window.visualViewport.height;
       }
+      
       setVisualViewportHeight(currentHeight);
+      
+      // Detect if keyboard is open (Visual viewport is significantly smaller than screen height)
+      // We use a threshold of 150px difference
+      const isKeyBoard = window.visualViewport && (window.innerHeight - window.visualViewport.height > 150);
+      setIsKeyboardOpen(!!isKeyBoard);
 
-      // 2. FORCE SCROLL TO TOP
-      // This prevents the browser from pushing the header off-screen
-      // when the keyboard opens and tries to center the input.
+      // Force scroll to top to counteract Safari's automatic scroll
       window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
     };
 
-    // Initial set
     handleResize();
 
-    // Listeners
     window.addEventListener('resize', handleResize);
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleResize);
@@ -102,6 +110,12 @@ const EncryptedChat = () => {
     }
 
     return () => {
+      // Cleanup styles
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      document.body.style.overflow = '';
+      
       window.removeEventListener('resize', handleResize);
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleResize);
@@ -471,7 +485,7 @@ const EncryptedChat = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // --- RENDER LOGIN (SCROLLABLE WRAPPER) ---
+  // --- RENDER LOGIN ---
   if (!isLoggedIn) {
     return (
       <div 
@@ -510,13 +524,11 @@ const EncryptedChat = () => {
     );
   }
 
-  // --- RENDER CHAT (FIXED TOP, DYNAMIC HEIGHT) ---
+  // --- RENDER CHAT ---
   return (
     <div 
-      // FIX: Use 'fixed' positioning with 'top: 0' explicitly
-      // This combined with window.scrollTo(0,0) keeps the header pinned.
       className="fixed top-0 left-0 w-full flex flex-col bg-[#efeae2] font-sans text-gray-800"
-      style={{ height: visualViewportHeight }} 
+      style={{ height: visualViewportHeight, overflow: 'hidden' }} 
     >
       {/* HEADER WRAPPER */}
       <div className="relative z-30 flex-shrink-0 bg-[#f0f2f5] border-b border-gray-300">
@@ -707,7 +719,11 @@ const EncryptedChat = () => {
       )}
 
       {/* INPUT AREA */}
-      <div className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+      <div 
+        className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0" 
+        // FIX: Conditional padding. If keyboard is open, 10px. If closed, include Safe Area.
+        style={{ paddingBottom: isKeyboardOpen ? '10px' : 'max(10px, env(safe-area-inset-bottom))' }}
+      >
         <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
           <button 
