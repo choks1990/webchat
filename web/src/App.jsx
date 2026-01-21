@@ -77,13 +77,18 @@ const EncryptedChat = () => {
   // --- 1. VIEWPORT & KEYBOARD HANDLING (CRITICAL FIX) ---
   useEffect(() => {
     const handleResize = () => {
-      // Use visualViewport if available (iOS/Android modern browsers)
-      // This tells us the exact height *above* the keyboard
+      // 1. Get the actual visible height above the keyboard
+      let currentHeight = window.innerHeight;
       if (window.visualViewport) {
-        setVisualViewportHeight(window.visualViewport.height);
-      } else {
-        setVisualViewportHeight(window.innerHeight);
+        currentHeight = window.visualViewport.height;
       }
+      setVisualViewportHeight(currentHeight);
+
+      // 2. FORCE SCROLL TO TOP
+      // This prevents the browser from pushing the header off-screen
+      // when the keyboard opens and tries to center the input.
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
     };
 
     // Initial set
@@ -466,12 +471,12 @@ const EncryptedChat = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // --- RENDER LOGIN (FIXED: Scrollable & Visual Viewport) ---
+  // --- RENDER LOGIN (SCROLLABLE WRAPPER) ---
   if (!isLoggedIn) {
     return (
       <div 
         className="fixed inset-0 bg-[#f0f2f5] overflow-y-auto"
-        style={{ height: visualViewportHeight }} // Locks height above keyboard
+        style={{ height: visualViewportHeight }} 
       >
         <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
@@ -505,18 +510,18 @@ const EncryptedChat = () => {
     );
   }
 
-  // --- RENDER CHAT (FIXED: Fixed Positioning & Visual Viewport) ---
+  // --- RENDER CHAT (FIXED TOP, DYNAMIC HEIGHT) ---
   return (
     <div 
-      className="fixed inset-0 flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full"
-      // LOCKING HEIGHT: This prevents the browser from scrolling the body when keyboard opens
+      // FIX: Use 'fixed' positioning with 'top: 0' explicitly
+      // This combined with window.scrollTo(0,0) keeps the header pinned.
+      className="fixed top-0 left-0 w-full flex flex-col bg-[#efeae2] font-sans text-gray-800"
       style={{ height: visualViewportHeight }} 
     >
       {/* HEADER WRAPPER */}
       <div className="relative z-30 flex-shrink-0 bg-[#f0f2f5] border-b border-gray-300">
         <div 
           className="px-4 py-3 flex justify-between items-center"
-          // Safe area padding for notch
           style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
         >
           <div className="flex items-center gap-3">
