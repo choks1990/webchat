@@ -166,11 +166,7 @@ const EncryptedChat = () => {
     
     setVh();
     window.addEventListener('resize', setVh);
-    window.addEventListener('orientationchange', setVh);
-    return () => {
-      window.removeEventListener('resize', setVh);
-      window.removeEventListener('orientationchange', setVh);
-    };
+    return () => window.removeEventListener('resize', setVh);
   }, []);
 
   useEffect(() => {
@@ -340,7 +336,9 @@ const EncryptedChat = () => {
     setSelectedFile(file);
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = (e) => setFilePreviewUrl(e.target.result);
+      reader.onloadend = () => {
+        setFilePreviewUrl(reader.result);
+      };
       reader.readAsDataURL(file);
     } else {
       setFilePreviewUrl(null);
@@ -355,39 +353,40 @@ const EncryptedChat = () => {
 
   const confirmAndUploadFile = async () => {
     if (!selectedFile) return;
-    
-    const fileToUpload = selectedFile;
-    cancelFileUpload();
 
-    const fileUrl = await uploadToCloudinary(fileToUpload);
-    if (fileUrl) {
-      try {
+    try {
+      const fileUrl = await uploadToCloudinary(selectedFile, 'auto');
+      if (fileUrl) {
         await addDoc(collection(db, "messages"), {
+          fileName: selectedFile.name,
           fileData: fileUrl,
-          fileName: fileToUpload.name,
-          fileType: fileToUpload.type,
-          fileSize: fileToUpload.size,
+          fileType: selectedFile.type,
+          fileSize: selectedFile.size,
           sender: userType,
           timestamp: serverTimestamp(),
           type: 'file',
           status: 'sent'
         });
-      } catch (error) {
-        console.error("Error sending file message:", error);
-        alert("Failed to send file.");
+        cancelFileUpload();
       }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Failed to upload file");
     }
   };
 
-  // --- 7. VOICE NOTES ---
+  // --- 7. CALL LOGIC ---
   const startCall = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
+      setRecordingTime(0);
 
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
       mediaRecorderRef.current.onstop = async () => {
@@ -448,7 +447,7 @@ const EncryptedChat = () => {
   // --- RENDER LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
+      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
         <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
           <div className="text-center mb-10">
             <div className="bg-[#25d366] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
@@ -482,72 +481,79 @@ const EncryptedChat = () => {
   // --- RENDER CHAT ---
   return (
     <div 
-      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full fixed inset-0 overflow-hidden"
+      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full"
       style={{ height: '100vh', height: 'calc(var(--vh, 1vh) * 100)' }}
     >
-      {/* HEADER */}
-      <div className="bg-[#f0f2f5] border-b border-gray-300 px-4 py-3 z-30 flex justify-between items-center flex-shrink-0" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="bg-gray-300 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 overflow-hidden">
-              <User size={24} />
+      {/* HEADER WRAPPER (Relative for Settings Menu positioning) */}
+      <div className="relative z-30 flex-shrink-0 bg-[#f0f2f5] border-b border-gray-300">
+        <div 
+          className="px-4 py-3 flex justify-between items-center"
+          // FIX: Added max() with env(safe-area-inset-top) to handle notches
+          style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="bg-gray-300 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 overflow-hidden">
+                <User size={24} />
+              </div>
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] border-2 border-[#f0f2f5] rounded-full"></div>
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#25d366] border-2 border-[#f0f2f5] rounded-full"></div>
+            <div>
+              <h2 className="font-bold text-base text-gray-900 leading-tight">Circle Connect</h2>
+              <p className="text-xs text-gray-500">
+                {userType === 'admin' ? 'Admin' : 'Member'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-base text-gray-900 leading-tight">Circle Connect</h2>
-            <p className="text-xs text-gray-500">
-              {userType === 'admin' ? 'Admin' : 'Member'}
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 text-gray-600">
-          <button 
-            onClick={startCall} 
-            className="p-2.5 hover:bg-gray-200 rounded-full transition-all text-gray-600"
-            title="Start Voice Note"
-          >
-            <Phone size={20} />
-          </button>
           
-          {userType === 'admin' && (
-            <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-gray-200 rounded-full transition-all">
-              <Settings size={20} />
+          <div className="flex items-center gap-3 text-gray-600">
+            <button 
+              onClick={startCall} 
+              className="p-2.5 hover:bg-gray-200 rounded-full transition-all text-gray-600"
+              title="Start Voice Note"
+            >
+              <Phone size={20} />
             </button>
-          )}
-          <button onClick={handleLogout} className="p-2 hover:bg-gray-200 rounded-full transition-all" title="Logout">
-            <LogOut size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* SETTINGS OVERLAY */}
-      {showSettings && userType === 'admin' && (
-        <div className="bg-white border-b border-gray-300 p-6 absolute top-[65px] right-0 left-0 z-20 shadow-lg animate-in slide-in-from-top duration-200" style={{ top: 'calc(65px + env(safe-area-inset-top))' }}>
-          <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg">Auto-Delete Messages</h3>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {[1, 3, 7, 30].map(day => (
-                <button 
-                  key={day} 
-                  onClick={() => updateAutoDeleteSettings(day)} 
-                  className={`px-6 py-3 rounded-full text-sm font-bold transition-all border ${
-                    autoDeleteDays === day 
-                      ? 'bg-[#25d366] text-white border-[#25d366]' 
-                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {day} Day{day > 1 ? 's' : ''}
-                </button>
-              ))}
-            </div>
+            
+            {userType === 'admin' && (
+              <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-gray-200 rounded-full transition-all">
+                <Settings size={20} />
+              </button>
+            )}
+            <button onClick={handleLogout} className="p-2 hover:bg-gray-200 rounded-full transition-all" title="Logout">
+              <LogOut size={20} />
+            </button>
           </div>
         </div>
-      )}
+
+        {/* SETTINGS OVERLAY */}
+        {/* FIX: Changed positioning to absolute relative to the header wrapper */}
+        {showSettings && userType === 'admin' && (
+          <div className="bg-white border-b border-gray-300 p-6 absolute top-full right-0 left-0 shadow-lg animate-in slide-in-from-top duration-200 z-20">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">Auto-Delete Messages</h3>
+                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {[1, 3, 7, 30].map(day => (
+                  <button 
+                    key={day} 
+                    onClick={() => updateAutoDeleteSettings(day)} 
+                    className={`px-6 py-3 rounded-full text-sm font-bold transition-all border ${
+                      autoDeleteDays === day 
+                        ? 'bg-[#25d366] text-white border-[#25d366]' 
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {day} Day{day > 1 ? 's' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* MESSAGES AREA */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat" style={{ minHeight: 0 }}>
