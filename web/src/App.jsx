@@ -63,6 +63,7 @@ const EncryptedChat = () => {
   // Viewport State for Keyboard handling
   const [visualViewportHeight, setVisualViewportHeight] = useState(window.innerHeight);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // --- REFS ---
   const messagesEndRef = useRef(null);
@@ -77,28 +78,39 @@ const EncryptedChat = () => {
 
   // --- 1. SAFARI/IOS SCROLL LOCK & VIEWPORT ---
   useEffect(() => {
-    // This locks the body to prevent Safari from scrolling the "whole page" 
-    // when the keyboard opens. We only want the internal div to scroll.
+    // Lock body to prevent Safari bouncy scroll
     document.body.style.position = 'fixed';
     document.body.style.width = '100%';
     document.body.style.height = '100%';
     document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    
+    // Prevent overscroll/bounce
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.position = 'fixed';
+    document.documentElement.style.width = '100%';
+    document.documentElement.style.height = '100%';
 
     const handleResize = () => {
-      let currentHeight = window.innerHeight;
+      // Always prevent page scroll
+      window.scrollTo(0, 0);
+      
+      const screenHeight = window.innerHeight;
+      let currentHeight = screenHeight;
+      let kbHeight = 0;
+      
       if (window.visualViewport) {
         currentHeight = window.visualViewport.height;
+        // Calculate keyboard height
+        kbHeight = screenHeight - currentHeight;
       }
       
       setVisualViewportHeight(currentHeight);
+      setKeyboardHeight(kbHeight);
       
-      // Detect if keyboard is open (Visual viewport is significantly smaller than screen height)
-      // We use a threshold of 150px difference
-      const isKeyBoard = window.visualViewport && (window.innerHeight - window.visualViewport.height > 150);
-      setIsKeyboardOpen(!!isKeyBoard);
-
-      // Force scroll to top to counteract Safari's automatic scroll
-      window.scrollTo(0, 0);
+      // Keyboard is open if difference > 150px
+      const isKB = kbHeight > 150;
+      setIsKeyboardOpen(isKB);
     };
 
     handleResize();
@@ -109,14 +121,28 @@ const EncryptedChat = () => {
       window.visualViewport.addEventListener('scroll', handleResize);
     }
 
+    // Prevent scroll on the window
+    const preventScroll = (e) => {
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('scroll', preventScroll, { passive: false });
+
     return () => {
-      // Cleanup styles
+      // Cleanup
       document.body.style.position = '';
       document.body.style.width = '';
       document.body.style.height = '';
       document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.position = '';
+      document.documentElement.style.width = '';
+      document.documentElement.style.height = '';
       
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', preventScroll);
+      
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleResize);
         window.visualViewport.removeEventListener('scroll', handleResize);
@@ -510,6 +536,7 @@ const EncryptedChat = () => {
                 onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
                 placeholder="Enter Password" 
                 className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-xl text-xl focus:outline-none focus:border-[#25d366] transition-all text-center"
+                style={{ fontSize: '16px' }}
               />
               <button 
                 onClick={handleUnifiedLogin} 
@@ -528,7 +555,11 @@ const EncryptedChat = () => {
   return (
     <div 
       className="fixed top-0 left-0 w-full flex flex-col bg-[#efeae2] font-sans text-gray-800"
-      style={{ height: visualViewportHeight, overflow: 'hidden' }} 
+      style={{ 
+        height: visualViewportHeight, 
+        overflow: 'hidden',
+        touchAction: 'pan-y'
+      }} 
     >
       {/* HEADER WRAPPER */}
       <div className="relative z-30 flex-shrink-0 bg-[#f0f2f5] border-b border-gray-300">
@@ -600,7 +631,14 @@ const EncryptedChat = () => {
       </div>
 
       {/* MESSAGES AREA */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat" style={{ minHeight: 0 }}>
+      <div 
+        className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat" 
+        style={{ 
+          minHeight: 0,
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain'
+        }}
+      >
         {loadingMessages ? (
           <div className="flex justify-center items-center h-full">
             <div className="bg-white/80 px-4 py-2 rounded-full text-sm font-medium shadow-sm">Loading...</div>
@@ -720,9 +758,12 @@ const EncryptedChat = () => {
 
       {/* INPUT AREA */}
       <div 
-        className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0" 
-        // FIX: Conditional padding. If keyboard is open, 10px. If closed, include Safe Area.
-        style={{ paddingBottom: isKeyboardOpen ? '10px' : 'max(10px, env(safe-area-inset-bottom))' }}
+        className="bg-[#f0f2f5] px-4 py-2.5 flex items-center gap-3 flex-shrink-0 border-t border-gray-200" 
+        style={{ 
+          paddingBottom: isKeyboardOpen ? '10px' : 'max(10px, env(safe-area-inset-bottom))',
+          position: 'relative',
+          zIndex: 10
+        }}
       >
         <div className="flex items-center">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf,.doc,.docx" disabled={uploading} />
@@ -745,6 +786,7 @@ const EncryptedChat = () => {
             placeholder="Type a message" 
             disabled={uploading} 
             className="flex-1 focus:outline-none text-gray-800 bg-transparent text-[15px]" 
+            style={{ fontSize: '16px' }}
           />
         </div>
 
