@@ -60,6 +60,9 @@ const EncryptedChat = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
 
+  // Viewport State for Keyboard handling
+  const [visualViewportHeight, setVisualViewportHeight] = useState(window.innerHeight);
+
   // --- REFS ---
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -71,7 +74,38 @@ const EncryptedChat = () => {
   const ADMIN_PASSWORD = '1990';
   const USER_PASSWORD = '1964';
 
-  // --- 1. INITIALIZATION & CLEANUP ---
+  // --- 1. VIEWPORT & KEYBOARD HANDLING (CRITICAL FIX) ---
+  useEffect(() => {
+    const handleResize = () => {
+      // Use visualViewport if available (iOS/Android modern browsers)
+      // This tells us the exact height *above* the keyboard
+      if (window.visualViewport) {
+        setVisualViewportHeight(window.visualViewport.height);
+      } else {
+        setVisualViewportHeight(window.innerHeight);
+      }
+    };
+
+    // Initial set
+    handleResize();
+
+    // Listeners
+    window.addEventListener('resize', handleResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
+    };
+  }, []);
+
+  // --- 2. INITIALIZATION & CLEANUP ---
   useEffect(() => {
     let unsubscribe = null;
 
@@ -157,18 +191,6 @@ const EncryptedChat = () => {
     };
   }, [isLoggedIn, userType]);
 
-  // Handle Viewport Height for Mobile Browsers
-  useEffect(() => {
-    const setVh = () => {
-      let vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
-    
-    setVh();
-    window.addEventListener('resize', setVh);
-    return () => window.removeEventListener('resize', setVh);
-  }, []);
-
   useEffect(() => {
     if (!loadingMessages && messages.length > 0) {
       scrollToBottom();
@@ -179,7 +201,7 @@ const EncryptedChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // --- 2. LOGIC: AUTO-DELETE ---
+  // --- 3. LOGIC: AUTO-DELETE ---
   const updateAutoDeleteSettings = async (days) => {
     setAutoDeleteDays(days);
     try {
@@ -218,7 +240,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 3. LOGIC: MANUAL DELETE ---
+  // --- 4. LOGIC: MANUAL DELETE ---
   const deleteMessage = async (msgId) => {
     if (window.confirm("Delete this message permanently?")) {
       try {
@@ -230,7 +252,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 4. CLOUDINARY UPLOAD ---
+  // --- 5. CLOUDINARY UPLOAD ---
   const uploadToCloudinary = async (fileOrBlob, resourceType = 'auto') => {
     const cloudName = "dujpj0445";
     const uploadPreset = "chat_app_upload";
@@ -261,7 +283,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 5. AUTHENTICATION ---
+  // --- 6. AUTHENTICATION ---
   const handleUnifiedLogin = () => {
     if (password === ADMIN_PASSWORD) {
       setIsLoggedIn(true);
@@ -300,7 +322,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 6. SENDING MESSAGES ---
+  // --- 7. SENDING MESSAGES ---
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
     if (!textToSend || !isLoggedIn || !userType) return;
@@ -375,7 +397,7 @@ const EncryptedChat = () => {
     }
   };
 
-  // --- 7. CALL LOGIC ---
+  // --- 8. CALL LOGIC ---
   const startCall = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -444,51 +466,57 @@ const EncryptedChat = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // --- RENDER LOGIN ---
+  // --- RENDER LOGIN (FIXED: Scrollable & Visual Viewport) ---
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
-        <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
-          <div className="text-center mb-10">
-            <div className="bg-[#25d366] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
-              <Phone size={40} className="text-white" />
+      <div 
+        className="fixed inset-0 bg-[#f0f2f5] overflow-y-auto"
+        style={{ height: visualViewportHeight }} // Locks height above keyboard
+      >
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
+            <div className="text-center mb-10">
+              <div className="bg-[#25d366] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
+                <Phone size={40} className="text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Circle Connect</h1>
+              <p className="text-gray-500 font-medium">Secure and private messaging</p>
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Circle Connect</h1>
-            <p className="text-gray-500 font-medium">Secure and private messaging</p>
-          </div>
-          
-          <div className="space-y-6">
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
-              placeholder="Enter Password" 
-              className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-xl text-xl focus:outline-none focus:border-[#25d366] transition-all text-center"
-            />
-            <button 
-              onClick={handleUnifiedLogin} 
-              className="w-full bg-[#25d366] text-white py-4 rounded-xl text-xl font-bold hover:bg-[#128c7e] active:scale-[0.98] transition-all shadow-md"
-            >
-              Sign In
-            </button>
+            
+            <div className="space-y-6">
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                onKeyPress={(e) => e.key === 'Enter' && handleUnifiedLogin()}
+                placeholder="Enter Password" 
+                className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-xl text-xl focus:outline-none focus:border-[#25d366] transition-all text-center"
+              />
+              <button 
+                onClick={handleUnifiedLogin} 
+                className="w-full bg-[#25d366] text-white py-4 rounded-xl text-xl font-bold hover:bg-[#128c7e] active:scale-[0.98] transition-all shadow-md"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // --- RENDER CHAT ---
+  // --- RENDER CHAT (FIXED: Fixed Positioning & Visual Viewport) ---
   return (
     <div 
-      className="flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full"
-      style={{ height: '100vh', height: 'calc(var(--vh, 1vh) * 100)' }}
+      className="fixed inset-0 flex flex-col bg-[#efeae2] font-sans text-gray-800 w-full"
+      // LOCKING HEIGHT: This prevents the browser from scrolling the body when keyboard opens
+      style={{ height: visualViewportHeight }} 
     >
-      {/* HEADER WRAPPER (Relative for Settings Menu positioning) */}
+      {/* HEADER WRAPPER */}
       <div className="relative z-30 flex-shrink-0 bg-[#f0f2f5] border-b border-gray-300">
         <div 
           className="px-4 py-3 flex justify-between items-center"
-          // FIX: Added max() with env(safe-area-inset-top) to handle notches
+          // Safe area padding for notch
           style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
         >
           <div className="flex items-center gap-3">
@@ -527,7 +555,6 @@ const EncryptedChat = () => {
         </div>
 
         {/* SETTINGS OVERLAY */}
-        {/* FIX: Changed positioning to absolute relative to the header wrapper */}
         {showSettings && userType === 'admin' && (
           <div className="bg-white border-b border-gray-300 p-6 absolute top-full right-0 left-0 shadow-lg animate-in slide-in-from-top duration-200 z-20">
             <div className="max-w-4xl mx-auto">
