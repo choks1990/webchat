@@ -64,6 +64,7 @@ const EncryptedChat = () => {
   const [visualViewportHeight, setVisualViewportHeight] = useState(window.innerHeight);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // --- REFS ---
   const messagesEndRef = useRef(null);
@@ -71,7 +72,9 @@ const EncryptedChat = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
-  const unsubscribeRef = useRef(null); 
+  const unsubscribeRef = useRef(null);
+  const resizeTimeoutRef = useRef(null);
+  const rafRef = useRef(null); 
 
   const ADMIN_PASSWORD = '1990';
   const USER_PASSWORD = '1964';
@@ -92,25 +95,45 @@ const EncryptedChat = () => {
     document.documentElement.style.height = '100%';
 
     const handleResize = () => {
-      // Always prevent page scroll
-      window.scrollTo(0, 0);
-      
-      const screenHeight = window.innerHeight;
-      let currentHeight = screenHeight;
-      let kbHeight = 0;
-      
-      if (window.visualViewport) {
-        currentHeight = window.visualViewport.height;
-        // Calculate keyboard height
-        kbHeight = screenHeight - currentHeight;
+      // Cancel any pending animation frame
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
       }
-      
-      setVisualViewportHeight(currentHeight);
-      setKeyboardHeight(kbHeight);
-      
-      // Keyboard is open if difference > 150px
-      const isKB = kbHeight > 150;
-      setIsKeyboardOpen(isKB);
+
+      // Use requestAnimationFrame for smoother updates
+      rafRef.current = requestAnimationFrame(() => {
+        // Always prevent page scroll
+        window.scrollTo(0, 0);
+        
+        const screenHeight = window.innerHeight;
+        let currentHeight = screenHeight;
+        let kbHeight = 0;
+        
+        if (window.visualViewport) {
+          currentHeight = window.visualViewport.height;
+          // Calculate keyboard height
+          kbHeight = screenHeight - currentHeight;
+        }
+        
+        // Keyboard is open if difference > 150px
+        const isKB = kbHeight > 150;
+        
+        // Detect transition state
+        if (isKB !== isKeyboardOpen) {
+          setIsTransitioning(true);
+          // Clear transition state after animation completes
+          if (resizeTimeoutRef.current) {
+            clearTimeout(resizeTimeoutRef.current);
+          }
+          resizeTimeoutRef.current = setTimeout(() => {
+            setIsTransitioning(false);
+          }, 300); // Match CSS transition duration
+        }
+        
+        setVisualViewportHeight(currentHeight);
+        setKeyboardHeight(kbHeight);
+        setIsKeyboardOpen(isKB);
+      });
     };
 
     handleResize();
@@ -129,6 +152,13 @@ const EncryptedChat = () => {
 
     return () => {
       // Cleanup
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      
       document.body.style.position = '';
       document.body.style.width = '';
       document.body.style.height = '';
@@ -148,7 +178,7 @@ const EncryptedChat = () => {
         window.visualViewport.removeEventListener('scroll', handleResize);
       }
     };
-  }, []);
+  }, [isKeyboardOpen]);
 
   // --- 2. INITIALIZATION & CLEANUP ---
   useEffect(() => {
@@ -558,7 +588,8 @@ const EncryptedChat = () => {
       style={{ 
         height: visualViewportHeight, 
         overflow: 'hidden',
-        touchAction: 'pan-y'
+        touchAction: 'pan-y',
+        transition: isTransitioning ? 'height 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)' : 'none'
       }} 
     >
       {/* HEADER WRAPPER */}
@@ -762,7 +793,8 @@ const EncryptedChat = () => {
         style={{ 
           paddingBottom: isKeyboardOpen ? '10px' : 'max(10px, env(safe-area-inset-bottom))',
           position: 'relative',
-          zIndex: 10
+          zIndex: 10,
+          transition: isTransitioning ? 'padding-bottom 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)' : 'none'
         }}
       >
         <div className="flex items-center">

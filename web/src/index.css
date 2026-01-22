@@ -19,6 +19,8 @@ html, body {
   height: 100%;
   overflow: hidden;
   position: relative;
+  /* Optimize for transitions */
+  will-change: height;
 }
 
 /* Prevent iOS text size adjustment */
@@ -63,5 +65,21 @@ body {
 @supports (-webkit-touch-callout: none) {
   body {
     height: -webkit-fill-available;
+  }
+}
+
+/* Smooth transitions for keyboard animations */
+.fixed {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Hardware acceleration for better performance */
+@media (hover: none) and (pointer: coarse) {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
